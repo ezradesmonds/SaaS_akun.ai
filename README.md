@@ -1,123 +1,87 @@
-# Akun.AI 🤖💰
+# Akun.AI
 
-> Akuntansi UMKM yang bisa diajak ngobrol. Input transaksi, tanya laporan, dapatkan insight — semua lewat chat.
+Akun.AI is an AI-assisted accounting SaaS for Indonesian SMEs. It combines bookkeeping workflows, financial reports, invoicing, inventory support, billing, and AI assistance on top of a Supabase-backed Next.js application.
+
+## Overview
+
+The project is built as a multi-business accounting workspace. Users can record transactions, review reports, manage invoices and inventory, and use an AI assistant for accounting support. The backend also includes subscription billing, role-based access, usage limits, audit trails, and integration points for WhatsApp and OCR-based receipt processing.
+
+## Key Features
+
+- Multi-business onboarding with company profile setup and chart of accounts.
+- Double-entry transaction flow with debit/credit validation before persistence.
+- Accounting dashboard for revenue, expense, cash flow, and business health summaries.
+- Financial reports, including profit and loss, balance sheet, and cash flow views.
+- AI accounting assistant backed by OpenRouter for contextual finance help.
+- OCR receipt/document processing flow for extracting transaction data from uploaded files.
+- Invoice and receivable management, including PDF generation support.
+- Inventory and stock-related workflows for businesses that sell physical goods.
+- Tax-related modules and reporting integration points.
+- Team access, roles, permissions, subscription plans, usage limits, and audit logs.
+- Mayar billing/webhook integration for subscription lifecycle handling.
+- WhatsApp webhook integration for messaging and assistant workflows.
 
 ## Tech Stack
 
-- **Frontend + Backend**: Next.js 14 (App Router)
-- **Database**: Supabase (PostgreSQL + Auth + RLS)
-- **LLM**: MiniMax 2.5 via OpenRouter (free tier)
-- **Styling**: Tailwind CSS
-- **Hosting**: Vercel
-
-## Setup Guide
-
-### 1. Clone & Install
-
-```bash
-git clone <repo-url>
-cd akun-ai
-npm install
-```
-
-### 2. Setup Supabase
-
-1. Buat project baru di [supabase.com](https://supabase.com)
-2. Masuk ke **SQL Editor**
-3. Copy-paste isi file `supabase/migrations/001_initial_schema.sql` dan run
-4. Ambil credentials dari **Settings > API**
-
-### 3. Setup OpenRouter
-
-1. Daftar di [openrouter.ai](https://openrouter.ai)
-2. Buat API key baru
-3. MiniMax 2.5 sudah tersedia free tier
-
-### 4. Environment Variables
-
-```bash
-cp .env.local.example .env.local
-```
-
-Isi `.env.local`:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
-SUPABASE_SERVICE_ROLE_KEY=eyJ...
-OPENROUTER_API_KEY=sk-or-...
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-```
-
-### 5. Run Development
-
-```bash
-npm run dev
-```
-
-Buka [http://localhost:3000](http://localhost:3000)
+- Framework: Next.js 14, React 18, TypeScript
+- Styling: Tailwind CSS
+- Data and auth: Supabase Postgres, Supabase Auth, Supabase SSR
+- State and validation: Zustand, Zod
+- Charts and reporting: Recharts, ExcelJS
+- PDF/browser rendering: Puppeteer Core, Sparticuz Chromium
+- AI and OCR: OpenRouter-compatible models and vision workflows
+- Billing and messaging: Mayar, WhatsApp Cloud API integration points
 
 ## Project Structure
 
-```
-src/
-├── app/
-│   ├── api/
-│   │   ├── chat/route.ts          # LLM orchestration (agentic loop)
-│   │   ├── transactions/route.ts  # CRUD transaksi
-│   │   └── reports/route.ts       # Generate laporan
-│   ├── auth/
-│   │   ├── login/page.tsx
-│   │   └── register/page.tsx
-│   ├── dashboard/page.tsx
-│   ├── chat/page.tsx
-│   └── transactions/page.tsx
-├── components/
-│   ├── chat/ChatInterface.tsx     # Core chat UI
-│   ├── dashboard/StatsCards.tsx
-│   └── layout/Sidebar.tsx
-├── lib/
-│   ├── supabase/client.ts         # Browser client
-│   ├── supabase/server.ts         # Server client + Admin client
-│   ├── openrouter/client.ts       # LLM + tool definitions + system prompt
-│   └── accounting/tools.ts        # Tool executor (LLM → DB bridge)
-└── types/index.ts                 # Global TypeScript types
+```text
+src/app/                 Next.js App Router pages and API routes
+src/app/api/             Transaction, report, OCR, chat, billing, invoice, and webhook APIs
+src/components/          Shared UI and domain components
+src/lib/                 Supabase clients, helpers, validation, and service utilities
+supabase/migrations/     Database schema, RLS, ledger, invoices, inventory, tax, and billing changes
+public/                  Static assets
 ```
 
-## Core Flow: Chat → LLM → Tool → DB
-
-```
-User: "tadi beli kertas 50rb"
-  ↓
-/api/chat (POST)
-  ↓
-callLLM() → OpenRouter → MiniMax 2.5
-  ↓
-LLM calls tool: get_accounts({ search: "kas" })
-  ↓
-executeTool() → Supabase DB
-  ↓
-LLM calls tool: create_transaction({ ... })
-  ↓
-executeTool() → Insert to DB (double-entry)
-  ↓
-LLM responds: "Oke, udah dicatat! Pengeluaran Rp50.000 untuk kertas. ✅"
-  ↓
-User sees response in chat
-```
-
-## Deploy to Vercel
+## Getting Started
 
 ```bash
-npm i -g vercel
-vercel --prod
+npm install
+npm run dev
 ```
 
-Set environment variables di Vercel dashboard.
+Create a `.env.local` file before running the full app. Required values depend on the enabled modules, but typically include Supabase, OpenRouter, Mayar, WhatsApp, and application URL configuration.
 
-## Roadmap
+```env
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+OPENROUTER_API_KEY=
+MAYAR_API_KEY=
+MAYAR_WEBHOOK_SECRET=
+WHATSAPP_ACCESS_TOKEN=
+```
 
-- [ ] MVP: Auth + Chat + Transaksi + Dashboard
-- [ ] V1: Export PDF, Balance Sheet, multi-kategori
-- [ ] V2: WhatsApp bot, upload struk OCR, multi-user
-- [ ] V3: Subscription billing (Midtrans), laporan pajak
+Apply the Supabase migrations before using the accounting modules.
+
+## Security Notes
+
+- Supabase Row Level Security and permission checks are part of the data model and should stay enabled.
+- Service role keys must only be used on the server side.
+- Webhook endpoints should validate provider signatures/secrets before mutating billing or messaging state.
+- AI-generated accounting suggestions should be treated as assistance, not as final bookkeeping authority. Persisted transactions still need deterministic validation.
+
+## Testing and Quality
+
+Recommended checks before deployment:
+
+```bash
+npm run lint
+npm run build
+```
+
+Add feature tests around ledger posting, RLS behavior, billing webhooks, invoice numbering, OCR failure cases, and AI assistant guardrails before using this in a production finance environment.
+
+## Status
+
+Portfolio SaaS project with production-oriented architecture. The most sensitive areas are accounting correctness, RLS coverage, webhook verification, and AI output validation.
