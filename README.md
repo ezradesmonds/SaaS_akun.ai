@@ -1,6 +1,8 @@
 # Akun.AI
 
-Akun.AI is an AI-assisted accounting SaaS for Indonesian SMEs. It combines bookkeeping workflows, financial reports, invoicing, inventory support, billing, and AI assistance on top of a Supabase-backed Next.js application.
+Akun.AI is a pre-launch AI-assisted accounting MVP for Indonesian SMEs. It combines bookkeeping workflows, financial reports, invoicing, inventory support, billing surfaces, and AI assistance on top of a Supabase-backed Next.js application.
+
+> **Current status:** prototype / pre-launch MVP with production-oriented architecture. It does not yet have real production users. OCR accuracy, billing and webhook flows, accounting correctness, RLS coverage, and production reliability still require real-world validation.
 
 ## Overview
 
@@ -84,4 +86,4 @@ Add feature tests around ledger posting, RLS behavior, billing webhooks, invoice
 
 ## Status
 
-Portfolio SaaS project with production-oriented architecture. The most sensitive areas are accounting correctness, RLS coverage, webhook verification, and AI output validation.
+Pre-launch MVP / prototype with production-oriented architecture and no real production users yet. Accounting correctness, RLS coverage, OCR accuracy, billing and webhook verification, AI output validation, and production reliability remain validation work—not completed production claims.
