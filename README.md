@@ -6,7 +6,7 @@
 
 - **Frontend + Backend**: Next.js 14 (App Router)
 - **Database**: Supabase (PostgreSQL + Auth + RLS)
-- **LLM**: MiniMax 2.5 via OpenRouter (free tier)
+- **LLM**: OpenRouter, configured through `OPENROUTER_MODEL`
 - **Styling**: Tailwind CSS
 - **Hosting**: Vercel
 
@@ -24,14 +24,14 @@ npm install
 
 1. Buat project baru di [supabase.com](https://supabase.com)
 2. Masuk ke **SQL Editor**
-3. Copy-paste isi file `supabase/migrations/001_initial_schema.sql` dan run
+3. Jalankan migration `001_initial_schema.sql` sampai `014_secure_ledger_and_invoice_posting.sql` secara berurutan
 4. Ambil credentials dari **Settings > API**
 
 ### 3. Setup OpenRouter
 
 1. Daftar di [openrouter.ai](https://openrouter.ai)
 2. Buat API key baru
-3. MiniMax 2.5 sudah tersedia free tier
+3. Atur `OPENROUTER_MODEL`; untuk OCR gunakan model vision melalui `OPENROUTER_OCR_MODEL`
 
 ### 4. Environment Variables
 
@@ -46,6 +46,10 @@ NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 SUPABASE_SERVICE_ROLE_KEY=eyJ...
 OPENROUTER_API_KEY=sk-or-...
+OPENROUTER_MODEL=your-configured-model
+OPENROUTER_OCR_MODEL=your-vision-model
+MAYAR_API_KEY=your-mayar-api-key
+MAYAR_WEBHOOK_SECRET=your-webhook-secret
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
@@ -91,7 +95,7 @@ User: "tadi beli kertas 50rb"
   ↓
 /api/chat (POST)
   ↓
-callLLM() → OpenRouter → MiniMax 2.5
+callLLM() → OpenRouter → configured model
   ↓
 LLM calls tool: get_accounts({ search: "kas" })
   ↓
@@ -115,9 +119,15 @@ vercel --prod
 
 Set environment variables di Vercel dashboard.
 
-## Roadmap
+## Engineering Specifications
 
-- [ ] MVP: Auth + Chat + Transaksi + Dashboard
-- [ ] V1: Export PDF, Balance Sheet, multi-kategori
-- [ ] V2: WhatsApp bot, upload struk OCR, multi-user
-- [ ] V3: Subscription billing (Midtrans), laporan pajak
+- [Product requirements](docs/PRODUCT_REQUIREMENTS.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Accounting invariants](docs/ACCOUNTING_INVARIANTS.md)
+- [API and event contracts](docs/API_EVENTS.md)
+
+Before public deployment, apply all migrations to a staging Supabase project and verify journal posting, reversals, invoice payments, RLS, and webhook retries.
+
+## Product Boundaries
+
+Official e-Faktur export, tax filing, merchant categorisation, cashflow forecasting, financial health scoring, and anonymised benchmarks are deferred. See [Product requirements](docs/PRODUCT_REQUIREMENTS.md) for the maintained scope.
