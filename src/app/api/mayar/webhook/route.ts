@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createHash } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/server'
 import { getPlanFromMayarPayload, verifyMayarWebhookSecret } from '@/lib/mayar/client'
 import { logAuditAction } from '@/lib/audit/log'
@@ -70,8 +71,20 @@ export async function POST(request: NextRequest) {
 
   const data = payload.data || {}
   const transactionId = data.transactionId || data.transaction_id || data.paymentLinkTransactionId || data.id
+  const eventKey = String(transactionId || data.id || createHash('sha256').update(JSON.stringify(payload)).digest('hex'))
 
   const supabase = createAdminClient()
+  const { error: eventError } = await supabase
+    .from('webhook_events')
+    .insert({ provider: 'mayar', event_key: eventKey, event_type: payload.event || null, payload, status: 'received' })
+
+  if (eventError?.code === '23505') {
+    return NextResponse.json({ received: true, ignored: true, reason: 'Duplicate webhook event' })
+  }
+  if (eventError) {
+    return NextResponse.json({ error: 'Unable to persist webhook event' }, { status: 500 })
+  }
+
   let subscription: PendingSubscription | null = null
 
   if (transactionId) {
@@ -95,15 +108,18 @@ export async function POST(request: NextRequest) {
   }
 
   if (!subscription?.business_id) {
+    await supabase.from('webhook_events').update({ status: 'ignored', processed_at: new Date().toISOString() }).eq('provider', 'mayar').eq('event_key', eventKey)
     return NextResponse.json({ error: 'Unable to map Mayar payment to a pending subscription' }, { status: 202 })
   }
 
   if (!subscription.pending_plan) {
+    await supabase.from('webhook_events').update({ status: 'ignored', processed_at: new Date().toISOString() }).eq('provider', 'mayar').eq('event_key', eventKey)
     return NextResponse.json({ received: true, ignored: true, reason: 'No pending plan for matched subscription' })
   }
 
   const payloadPlan = getPlanFromMayarPayload(payload)
   if (payloadPlan !== 'free' && payloadPlan !== subscription.pending_plan) {
+    await supabase.from('webhook_events').update({ status: 'failed', error: 'Payload plan mismatch', processed_at: new Date().toISOString() }).eq('provider', 'mayar').eq('event_key', eventKey)
     return NextResponse.json({ error: 'Mayar payload plan does not match pending plan' }, { status: 409 })
   }
 
@@ -113,7 +129,7 @@ export async function POST(request: NextRequest) {
   const periodEnd = new Date(periodStart)
   periodEnd.setMonth(periodEnd.getMonth() + 1)
 
-  await supabase
+  const { error: subscriptionError } = await supabase
     .from('subscriptions')
     .upsert({
       business_id: businessId,
@@ -132,6 +148,11 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString(),
     }, { onConflict: 'business_id' })
 
+  if (subscriptionError) {
+    await supabase.from('webhook_events').update({ status: 'failed', error: subscriptionError.message, processed_at: new Date().toISOString() }).eq('provider', 'mayar').eq('event_key', eventKey)
+    return NextResponse.json({ error: 'Unable to activate subscription' }, { status: 500 })
+  }
+
   const ownerId = await getBusinessOwnerId(businessId)
   if (ownerId) {
     await logAuditAction({
@@ -148,6 +169,12 @@ export async function POST(request: NextRequest) {
       },
     })
   }
+
+  await supabase
+    .from('webhook_events')
+    .update({ status: 'processed', processed_at: new Date().toISOString() })
+    .eq('provider', 'mayar')
+    .eq('event_key', eventKey)
 
   return NextResponse.json({ received: true })
 }

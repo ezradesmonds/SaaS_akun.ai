@@ -160,6 +160,7 @@ export async function POST(request: NextRequest) {
           },
           safePosting.receivable!.id,
           safePosting.paymentAccount!.id,
+          `invoice:${invoice.id}:initial-payment`,
         )
       }
     } catch (error) {

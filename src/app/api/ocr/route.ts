@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext, trackUsage, AUTH_ERRORS } from '@/lib/permissions/guard'
 import { createClient } from '@/lib/supabase/server'
+import { z } from 'zod'
 
 // ── OCR Receipt via LLM Vision ────────────────────────────────
 // Cara kerja:
 // 1. User upload foto struk
 // 2. Server encode ke base64
-// 3. Kirim ke MiniMax vision (atau GPT-4o) 
+// 3. Kirim ke model vision yang dikonfigurasi melalui OpenRouter
 // 4. LLM parse → return structured JSON transaksi
 // 5. Frontend tampilkan preview → user konfirmasi → simpan
 
@@ -93,11 +94,33 @@ interface OCRResult {
   notes: string
 }
 
+const OCRResultSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  description: z.string().trim().min(1).max(500),
+  merchant: z.string().trim().max(240).optional(),
+  items: z.array(z.object({ name: z.string().trim().min(1).max(240), amount: z.number().finite().min(0) })).max(100),
+  total: z.number().finite().min(0),
+  entries: z.array(z.object({
+    account_id: z.string().uuid(),
+    account_name: z.string().trim().max(240),
+    debit: z.number().finite().min(0),
+    credit: z.number().finite().min(0),
+    note: z.string().max(250),
+  })).min(2).max(20),
+  confidence: z.enum(['high', 'medium', 'low']),
+  raw_text: z.string().max(12000),
+  notes: z.string().max(2000),
+})
+
 async function callVisionLLM(
   base64Image: string,
   mimeType: string,
   accountList: string,
 ): Promise<OCRResult> {
+  const model = process.env.OPENROUTER_OCR_MODEL || process.env.OPENROUTER_MODEL
+  if (!process.env.OPENROUTER_API_KEY || !model) {
+    throw new Error('OCR belum dikonfigurasi. Atur OPENROUTER_API_KEY dan OPENROUTER_OCR_MODEL atau OPENROUTER_MODEL.')
+  }
   const today = new Date().toISOString().split('T')[0]
 
   const systemPrompt = `
@@ -140,9 +163,7 @@ Rules:
       'X-Title': 'Akun.AI OCR',
     },
     body: JSON.stringify({
-      // Use a vision-capable model
-      // MiniMax M1 supports vision, fallback to gpt-4o-mini
-      model: 'openai/gpt-4o-mini', // cheapest vision model
+      model,
       messages: [
         {
           role: 'system',
@@ -182,9 +203,8 @@ Rules:
   if (!content) throw new Error('Empty response from vision LLM')
 
   try {
-    const parsed = JSON.parse(content) as OCRResult
-    return parsed
+    return OCRResultSchema.parse(JSON.parse(content))
   } catch {
-    throw new Error('Failed to parse LLM JSON response')
+    throw new Error('OCR mengembalikan data yang tidak valid')
   }
 }

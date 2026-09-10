@@ -3,6 +3,7 @@ import { executeTool } from '@/lib/accounting/tools'
 import type { AccountingIntent } from '@/lib/openrouter/client'
 import type { Account, Transaction } from '@/types'
 import { format, endOfMonth, startOfMonth } from 'date-fns'
+import { createIdempotencyKey } from '@/lib/accounting/journal'
 
 type ChatExecutionResult = {
   message: string
@@ -133,31 +134,17 @@ async function createTransactionFromIntent(businessId: string, intent: Accountin
   }
 
   const supabase = createClient()
-  const { data: transaction, error: txError } = await supabase
-    .from('transactions')
-    .insert({
-      business_id: businessId,
-      date: tx.date || todayISO(),
-      description: tx.description,
-      reference: tx.reference || null,
-      source: 'ai',
-    })
-    .select()
-    .single()
+  const { data: transaction, error: txError } = await supabase.rpc('post_journal_transaction', {
+    p_business_id: businessId,
+    p_date: tx.date || todayISO(),
+    p_description: tx.description,
+    p_reference: tx.reference || null,
+    p_source: 'ai',
+    p_lines: validEntries,
+    p_idempotency_key: createIdempotencyKey(),
+  })
 
-  if (txError) throw txError
-
-  const { error: linesError } = await supabase
-    .from('transaction_lines')
-    .insert(validEntries.map((entry) => ({
-      transaction_id: transaction.id,
-      ...entry,
-    })))
-
-  if (linesError) {
-    await supabase.from('transactions').delete().eq('id', transaction.id)
-    throw linesError
-  }
+  if (txError || !transaction) throw txError || new Error('Transaction could not be posted')
 
   return {
     message: `Transaksi berhasil disimpan: ${tx.description} senilai ${formatIDR(totalDebit)}.`,

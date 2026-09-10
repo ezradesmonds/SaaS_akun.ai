@@ -1,4 +1,5 @@
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { createIdempotencyKey, validateJournalLines } from '@/lib/accounting/journal'
 import type {
   Account, Transaction, AccountBalance,
   ProfitLossReport, BalanceSheetReport, DashboardStats
@@ -138,7 +139,9 @@ async function createTransaction(
   businessId: string,
   input: Record<string, unknown>
 ): Promise<{ transaction: Transaction; success: boolean }> {
-  const supabase = createAdminClient()
+  // Writes retain the request user's JWT so the ledger RPC can enforce
+  // membership. Read-only WhatsApp/report calls continue to use the service role.
+  const supabase = createClient()
 
   const entries = input.entries as Array<{
     account_id: string
@@ -147,46 +150,25 @@ async function createTransaction(
     note?: string
   }>
 
-  // Validate double-entry balance
-  const totalDebit = entries.reduce((sum, e) => sum + (e.debit || 0), 0)
-  const totalCredit = entries.reduce((sum, e) => sum + (e.credit || 0), 0)
-
-  if (Math.abs(totalDebit - totalCredit) > 0.01) {
+  const validation = validateJournalLines(entries)
+  if (validation.error) {
     return {
       transaction: null as unknown as Transaction,
       success: false,
     }
   }
 
-  // Insert transaction
-  const { data: tx, error: txError } = await supabase
-    .from('transactions')
-    .insert({
-      business_id: businessId,
-      date: input.date as string || format(new Date(), 'yyyy-MM-dd'),
-      description: input.description as string,
-      reference: input.reference as string | undefined,
-      source: 'ai',
-    })
-    .select()
-    .single()
+  const { data: tx, error: txError } = await supabase.rpc('post_journal_transaction', {
+    p_business_id: businessId,
+    p_date: input.date as string || format(new Date(), 'yyyy-MM-dd'),
+    p_description: input.description as string,
+    p_reference: input.reference as string || null,
+    p_source: 'ai',
+    p_lines: validation.entries,
+    p_idempotency_key: createIdempotencyKey(),
+  })
 
-  if (txError) throw txError
-
-  // Insert lines
-  const lines = entries.map(entry => ({
-    transaction_id: tx.id,
-    account_id: entry.account_id,
-    debit: entry.debit || 0,
-    credit: entry.credit || 0,
-    note: entry.note,
-  }))
-
-  const { error: linesError } = await supabase
-    .from('transaction_lines')
-    .insert(lines)
-
-  if (linesError) throw linesError
+  if (txError || !tx) throw txError || new Error('Transaction could not be posted')
 
   return { transaction: tx, success: true }
 }

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { trackUsage } from '@/lib/permissions/guard'
+import { createIdempotencyKey } from '@/lib/accounting/journal'
 
 export const InvoiceItemSchema = z.object({
   description: z.string().trim().min(1).max(240),
@@ -186,65 +187,27 @@ export async function canPostInvoiceSafely(
   return { ok: true, receivable, revenue, paymentAccount, reason: null }
 }
 
-export async function createJournalTransaction(
-  supabase: SupabaseClient,
-  businessId: string,
-  date: string,
-  description: string,
-  reference: string,
-  entries: { account_id: string; debit: number; credit: number; note?: string }[],
-) {
-  const { data: tx, error: txError } = await supabase
-    .from('transactions')
-    .insert({ business_id: businessId, date, description, reference, source: 'manual' })
-    .select()
-    .single()
-
-  if (txError) throw new Error(txError.message)
-
-  const { error: linesError } = await supabase
-    .from('transaction_lines')
-    .insert(entries.map((entry) => ({ ...entry, transaction_id: tx.id })))
-
-  if (linesError) {
-    await supabase.from('transactions').delete().eq('id', tx.id).eq('business_id', businessId)
-    throw new Error(linesError.message)
-  }
-
-  await trackUsage(businessId, 'tx_count')
-
-  return tx as { id: string }
-}
-
 export async function postInvoiceIssuance(
   supabase: SupabaseClient,
   businessId: string,
   invoiceId: string,
   invoiceNumber: string,
-  issueDate: string,
-  totalAmount: number,
+  _issueDate: string,
+  _totalAmount: number,
   receivableAccountId: string,
   revenueAccountId: string,
 ) {
-  const tx = await createJournalTransaction(
-    supabase,
-    businessId,
-    issueDate,
-    `Invoice ${invoiceNumber}`,
-    invoiceNumber,
-    [
-      { account_id: receivableAccountId, debit: totalAmount, credit: 0, note: `Piutang invoice ${invoiceNumber}` },
-      { account_id: revenueAccountId, debit: 0, credit: totalAmount, note: `Pendapatan invoice ${invoiceNumber}` },
-    ],
-  )
+  const { data: tx, error } = await supabase.rpc('post_invoice_issuance', {
+    p_invoice_id: invoiceId,
+    p_business_id: businessId,
+    p_receivable_account_id: receivableAccountId,
+    p_revenue_account_id: revenueAccountId,
+    p_idempotency_key: `invoice:${invoiceId}:issuance`,
+  })
 
-  await supabase
-    .from('invoices')
-    .update({ transaction_id: tx.id, updated_at: new Date().toISOString() })
-    .eq('id', invoiceId)
-    .eq('business_id', businessId)
-
-  return tx
+  if (error || !tx) throw new Error(error?.message || `Gagal memposting invoice ${invoiceNumber}`)
+  await trackUsage(businessId, 'tx_count')
+  return tx as { id: string }
 }
 
 export async function recordInvoicePayment(
@@ -255,63 +218,29 @@ export async function recordInvoicePayment(
   payment: PaymentPayload,
   receivableAccountId?: string,
   paymentAccountId?: string,
+  idempotencyKey = createIdempotencyKey(),
 ) {
-  let txId: string | null = null
-  if (receivableAccountId && paymentAccountId) {
-    const paidDate = (payment.paid_at || new Date().toISOString()).slice(0, 10)
-    const tx = await createJournalTransaction(
-      supabase,
-      businessId,
-      paidDate,
-      `Pembayaran invoice ${invoiceNumber}`,
-      payment.reference || invoiceNumber,
-      [
-        { account_id: paymentAccountId, debit: payment.amount, credit: 0, note: payment.method || 'Pembayaran invoice' },
-        { account_id: receivableAccountId, debit: 0, credit: payment.amount, note: `Pelunasan ${invoiceNumber}` },
-      ],
-    )
-    txId = tx.id
+  if (!receivableAccountId || !paymentAccountId) {
+    throw new Error(`Akun piutang dan kas/bank diperlukan untuk pembayaran invoice ${invoiceNumber}`)
   }
 
-  const { data, error } = await supabase
-    .from('payments')
-    .insert({
-      business_id: businessId,
-      invoice_id: invoiceId,
-      transaction_id: txId,
-      amount: payment.amount,
-      paid_at: payment.paid_at || new Date().toISOString(),
-      method: payment.method || null,
-      reference: payment.reference || null,
-      notes: payment.notes || null,
-      payment_provider: payment.payment_provider || null,
-      provider_payment_id: payment.provider_payment_id || null,
-      provider_transaction_id: payment.provider_transaction_id || null,
-      provider_status: payment.provider_status || null,
-      mayar_status: payment.mayar_status || null,
-    })
-    .select()
-    .single()
+  const { data, error } = await supabase.rpc('record_invoice_payment_atomic', {
+    p_invoice_id: invoiceId,
+    p_business_id: businessId,
+    p_amount: payment.amount,
+    p_paid_at: payment.paid_at || new Date().toISOString(),
+    p_method: payment.method || null,
+    p_reference: payment.reference || invoiceNumber,
+    p_payment_provider: payment.payment_provider || null,
+    p_provider_payment_id: payment.provider_payment_id || null,
+    p_provider_transaction_id: payment.provider_transaction_id || null,
+    p_provider_status: payment.provider_status || null,
+    p_mayar_status: payment.mayar_status || null,
+    p_payment_account_id: paymentAccountId,
+    p_idempotency_key: idempotencyKey,
+  })
 
-  if (error) throw new Error(error.message)
-
-  const { data: invoice, error: invoiceError } = await supabase
-    .from('invoices')
-    .select('amount_paid, total_amount')
-    .eq('id', invoiceId)
-    .eq('business_id', businessId)
-    .single()
-
-  if (invoiceError) throw new Error(invoiceError.message)
-  const nextPaid = roundMoney(Number(invoice.amount_paid || 0) + payment.amount)
-  const nextStatus = nextPaid >= Number(invoice.total_amount || 0) ? 'paid' : 'issued'
-
-  const { error: updateError } = await supabase
-    .from('invoices')
-    .update({ amount_paid: nextPaid, status: nextStatus, updated_at: new Date().toISOString() })
-    .eq('id', invoiceId)
-    .eq('business_id', businessId)
-
-  if (updateError) throw new Error(updateError.message)
+  if (error || !data) throw new Error(error?.message || 'Gagal mencatat pembayaran invoice')
+  await trackUsage(businessId, 'tx_count')
   return data
 }

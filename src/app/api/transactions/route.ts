@@ -1,67 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { AUTH_ERRORS, getAuthContext, trackUsage } from '@/lib/permissions/guard'
-import { z } from 'zod'
-
-const EntrySchema = z.object({
-  account_id: z.string().uuid(),
-  debit: z.number().min(0),
-  credit: z.number().min(0),
-  note: z.string().trim().max(250).optional(),
-})
-
-const CreateSchema = z.object({
-  business_id: z.string().uuid(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  description: z.string().trim().min(1).max(500),
-  reference: z.string().trim().max(120).optional(),
-  entries: z.array(EntrySchema).min(2),
-})
-
-type Entry = z.infer<typeof EntrySchema>
-
-function validateEntries(entries: Entry[]) {
-  const validEntries = entries.filter((entry) => entry.debit > 0 || entry.credit > 0)
-
-  if (validEntries.length < 2) {
-    return { error: 'Minimal 2 baris jurnal dengan nilai debit atau kredit' }
-  }
-
-  const invalidLine = validEntries.find((entry) =>
-    (entry.debit > 0 && entry.credit > 0) || (entry.debit === 0 && entry.credit === 0)
-  )
-
-  if (invalidLine) {
-    return { error: 'Setiap baris harus berisi debit atau kredit saja, tidak keduanya' }
-  }
-
-  const totalDebit = validEntries.reduce((sum, entry) => sum + entry.debit, 0)
-  const totalCredit = validEntries.reduce((sum, entry) => sum + entry.credit, 0)
-
-  if (Math.abs(totalDebit - totalCredit) > 0.01) {
-    return {
-      error: `Tidak balance: total debit (${totalDebit}) tidak sama dengan total kredit (${totalCredit})`,
-    }
-  }
-
-  return { entries: validEntries }
-}
-
-async function validateAccountOwnership(
-  supabase: ReturnType<typeof createClient>,
-  businessId: string,
-  entries: Entry[],
-) {
-  const accountIds = Array.from(new Set(entries.map((entry) => entry.account_id)))
-  const { data: accounts, error } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('business_id', businessId)
-    .in('id', accountIds)
-
-  if (error) throw new Error(error.message)
-  return (accounts || []).length === accountIds.length
-}
+import { createIdempotencyKey, JournalEntrySchema, validateJournalLines } from '@/lib/accounting/journal'
+import { logAuditAction } from '@/lib/audit/log'
 
 // GET /api/transactions?business_id=xxx&page=1&limit=20
 export async function GET(request: NextRequest) {
@@ -112,7 +53,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const supabase = createClient()
   const body = await request.json()
-  const parsed = CreateSchema.safeParse(body)
+  const parsed = JournalEntrySchema.safeParse({ ...body, source: 'manual' })
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
   const { business_id, date, description, reference, entries } = parsed.data
@@ -123,36 +64,35 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ...AUTH_ERRORS.plan_limit_tx, usage: ctx.usage, plan: ctx.plan }, { status: 402 })
   }
 
-  const validation = validateEntries(entries)
+  const validation = validateJournalLines(entries)
   if (validation.error) return NextResponse.json({ error: validation.error }, { status: 400 })
 
-  try {
-    const accountsAreOwned = await validateAccountOwnership(supabase, ctx.businessId, validation.entries!)
-    if (!accountsAreOwned) {
-      return NextResponse.json({ error: 'Ada akun yang tidak valid untuk bisnis ini' }, { status: 400 })
-    }
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to validate transaction' }, { status: 500 })
-  }
+  const idempotencyKey = request.headers.get('idempotency-key') || createIdempotencyKey()
+  const { data: tx, error: txError } = await supabase.rpc('post_journal_transaction', {
+    p_business_id: ctx.businessId,
+    p_date: date,
+    p_description: description,
+    p_reference: reference || null,
+    p_source: 'manual',
+    p_lines: validation.entries,
+    p_idempotency_key: idempotencyKey,
+  })
 
-  const { data: tx, error: txError } = await supabase
-    .from('transactions')
-    .insert({ business_id: ctx.businessId, date, description, reference: reference || null, source: 'manual' })
-    .select()
-    .single()
-
-  if (txError) return NextResponse.json({ error: txError.message }, { status: 500 })
-
-  const { error: linesError } = await supabase
-    .from('transaction_lines')
-    .insert(validation.entries!.map((entry) => ({ ...entry, transaction_id: tx.id })))
-
-  if (linesError) {
-    await supabase.from('transactions').delete().eq('id', tx.id).eq('business_id', ctx.businessId)
-    return NextResponse.json({ error: linesError.message }, { status: 500 })
+  if (txError || !tx) {
+    return NextResponse.json({
+      error: txError?.message || 'Transaction could not be posted',
+      hint: 'Pastikan migration 013_ledger_posting_and_idempotency.sql sudah dijalankan di Supabase.',
+    }, { status: 500 })
   }
 
   await trackUsage(ctx.businessId, 'tx_count')
+  await logAuditAction({
+    actorId: ctx.userId,
+    action: 'transaction_posted',
+    targetType: 'transaction',
+    targetId: tx.id,
+    metadata: { business_id: ctx.businessId, source: 'manual', idempotency_key: idempotencyKey },
+  })
 
   return NextResponse.json({ data: tx }, { status: 201 })
 }

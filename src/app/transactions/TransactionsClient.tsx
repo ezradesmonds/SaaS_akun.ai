@@ -79,10 +79,10 @@ export default function TransactionsClient({ businessId, accounts }: Props) {
   useEffect(() => { setPage(1) }, [search, dateFrom, dateTo])
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Yakin hapus transaksi ini?')) return
+    if (!confirm('Balikkan transaksi ini? Sistem akan membuat jurnal pembalik agar riwayat akuntansi tetap utuh.')) return
     const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' })
     if (res.ok) {
-      toast.success('Transaksi dihapus')
+      toast.success('Jurnal pembalik dibuat')
       fetchTransactions()
     } else {
       const body = await res.json().catch(() => null)
@@ -251,6 +251,7 @@ function TxRow({
   const totalDebit = lines.reduce((s, l) => s + Number(l.debit), 0)
   const totalCredit = lines.reduce((s, l) => s + Number(l.credit), 0)
   const mainAccounts = lines.slice(0, 2).map(l => l.account?.name).filter(Boolean).join(', ')
+  const canReverse = tx.status !== 'voided' && !tx.reversal_of
 
   return (
     <tr className="table-row group">
@@ -258,6 +259,7 @@ function TxRow({
       <td className="px-4 py-3">
         <p className="text-sm text-white">{tx.description}</p>
         {tx.reference && <p className="text-xs text-surface-500">Ref: {tx.reference}</p>}
+        {tx.status === 'voided' && <p className="text-xs text-amber-400">Dibatalkan dengan jurnal pembalik</p>}
       </td>
       <td className="px-4 py-3 text-xs text-surface-400 max-w-32 truncate">{mainAccounts}</td>
       <td className="px-4 py-3 text-sm font-mono text-surface-200">{totalDebit > 0 ? formatIDR(totalDebit) : '-'}</td>
@@ -274,19 +276,23 @@ function TxRow({
       <td className="px-4 py-3">
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
           <button
-            onClick={() => onEdit(tx)}
-            className="p-1.5 rounded-lg text-surface-500 hover:text-brand-400 hover:bg-brand-500/10 transition-all"
-            aria-label="Edit transaksi"
+            disabled
+            className="p-1.5 rounded-lg text-surface-700 cursor-not-allowed"
+            aria-label="Transaksi posted tidak dapat diedit"
+            title="Transaksi posted tidak dapat diedit"
           >
             <Pencil size={14} />
           </button>
-          <button
-            onClick={() => onDelete(tx.id)}
-            className="p-1.5 rounded-lg text-surface-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
-            aria-label="Hapus transaksi"
-          >
-            <Trash2 size={14} />
-          </button>
+          {canReverse && (
+            <button
+              onClick={() => onDelete(tx.id)}
+              className="p-1.5 rounded-lg text-surface-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+              aria-label="Balikkan transaksi"
+              title="Balikkan transaksi"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
         </div>
       </td>
     </tr>
@@ -302,6 +308,7 @@ function TxCard({
 }) {
   const lines = tx.lines || []
   const totalDebit = lines.reduce((s, l) => s + Number(l.debit), 0)
+  const canReverse = tx.status !== 'voided' && !tx.reversal_of
 
   return (
     <div className="p-4 flex items-start justify-between gap-3">
@@ -310,15 +317,18 @@ function TxCard({
         <p className="text-xs text-surface-500 mt-1">
           {formatDate(tx.date)} - {tx.source === 'ai' ? 'AI' : 'Manual'}
         </p>
+        {tx.status === 'voided' && <p className="text-xs text-amber-400 mt-1">Dibatalkan dengan jurnal pembalik</p>}
       </div>
       <div className="flex items-center gap-2">
         <p className="text-sm font-semibold text-surface-200">{formatIDR(totalDebit)}</p>
-        <button onClick={() => onEdit(tx)} className="text-surface-600 hover:text-brand-400 p-1" aria-label="Edit transaksi">
+        <button disabled className="text-surface-700 cursor-not-allowed p-1" aria-label="Transaksi posted tidak dapat diedit">
           <Pencil size={14} />
         </button>
-        <button onClick={() => onDelete(tx.id)} className="text-surface-600 hover:text-red-400 p-1" aria-label="Hapus transaksi">
-          <Trash2 size={14} />
-        </button>
+        {canReverse && (
+          <button onClick={() => onDelete(tx.id)} className="text-surface-600 hover:text-red-400 p-1" aria-label="Balikkan transaksi">
+            <Trash2 size={14} />
+          </button>
+        )}
       </div>
     </div>
   )

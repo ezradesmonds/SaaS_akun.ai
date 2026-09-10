@@ -10,7 +10,7 @@ export async function logAuditAction({
 }: {
   actorId: string
   action: string
-  targetType: 'business' | 'subscription' | 'team' | 'user' | 'admin'
+  targetType: 'business' | 'subscription' | 'team' | 'user' | 'admin' | 'transaction'
   targetId?: string | null
   metadata?: Record<string, unknown>
   ipAddress?: string | null

@@ -3,7 +3,8 @@
 // ============================================================
 
 export type AccountType = 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE'
-export type TransactionSource = 'manual' | 'ai' | 'import'
+export type TransactionSource = 'manual' | 'ai' | 'import' | 'invoice' | 'payment'
+export type TransactionStatus = 'posted' | 'voided'
 export type BusinessType = 'umkm' | 'freelancer' | 'toko' | 'jasa'
 export type MessageRole = 'user' | 'assistant'
 
@@ -40,6 +41,10 @@ export interface Transaction {
   description: string
   reference?: string
   source: TransactionSource
+  status?: TransactionStatus
+  posted_at?: string
+  voided_at?: string | null
+  reversal_of?: string | null
   created_at: string
   updated_at: string
   // Joined

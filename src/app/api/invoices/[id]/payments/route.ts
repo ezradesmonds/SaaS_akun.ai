@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { AUTH_ERRORS, getAuthContext } from '@/lib/permissions/guard'
+import { createIdempotencyKey } from '@/lib/accounting/journal'
 import {
   PaymentSchema,
   canPostInvoiceSafely,
@@ -58,6 +59,10 @@ export async function POST(
   if (invoiceError) return NextResponse.json({ error: invoiceError.message }, { status: 500 })
 
   try {
+    const idempotencyKey = request.headers.get('idempotency-key')
+      || parsed.data.provider_payment_id
+      || parsed.data.provider_transaction_id
+      || createIdempotencyKey()
     const payment = await recordInvoicePayment(
       supabase,
       ctx.businessId,
@@ -66,6 +71,7 @@ export async function POST(
       parsed.data,
       safePosting.receivable!.id,
       safePosting.paymentAccount!.id,
+      `invoice:${params.id}:payment:${idempotencyKey}`,
     )
     return NextResponse.json({ data: payment }, { status: 201 })
   } catch (error) {
