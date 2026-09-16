@@ -87,7 +87,19 @@ export async function middleware(request: NextRequest) {
       .limit(1)
       .maybeSingle()
 
-    if (!membership) {
+    // Legacy databases can still have the recursive membership policy from
+    // migration 002. Owner lookup keeps existing workspaces usable until the
+    // RLS repair migration is applied, without granting access to other users.
+    const { data: ownedBusiness } = membership
+      ? { data: null }
+      : await supabase
+          .from('businesses')
+          .select('id')
+          .eq('user_id', user.id)
+          .limit(1)
+          .maybeSingle()
+
+    if (!membership && !ownedBusiness) {
       const url = request.nextUrl.clone()
       url.pathname = '/settings'
       url.searchParams.set('setup', 'true')

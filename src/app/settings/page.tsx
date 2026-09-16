@@ -34,15 +34,40 @@ export default function SettingsPage() {
         .from('businesses')
         .select('*')
         .eq('user_id', user.id)
-        .single()
+        .limit(1)
+        .maybeSingle()
 
-      setBusiness(biz)
+      let resolvedBusiness = biz
 
       if (biz) {
+        const repairResponse = await fetch('/api/business/setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: biz.name, type: biz.type }),
+        })
+
+        if (repairResponse.ok) {
+          const body = await repairResponse.json()
+          resolvedBusiness = body.business
+
+          if (new URLSearchParams(window.location.search).get('setup') === 'true') {
+            router.replace('/dashboard')
+            router.refresh()
+            return
+          }
+        } else if (new URLSearchParams(window.location.search).get('setup') === 'true') {
+          const body = await repairResponse.json().catch(() => null)
+          toast.error(body?.error || 'Gagal memperbaiki akses bisnis')
+        }
+      }
+
+      setBusiness(resolvedBusiness)
+
+      if (resolvedBusiness) {
         const { data: accs } = await supabase
           .from('accounts')
           .select('*')
-          .eq('business_id', biz.id)
+          .eq('business_id', resolvedBusiness.id)
           .order('code')
 
         setAccounts(accs || [])
@@ -50,7 +75,7 @@ export default function SettingsPage() {
       setLoading(false)
     }
     load()
-  }, [])
+  }, [router])
 
   if (loading) {
     return (

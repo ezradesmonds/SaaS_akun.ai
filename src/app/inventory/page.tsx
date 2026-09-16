@@ -14,15 +14,25 @@ export default async function InventoryPage() {
     .limit(1)
     .maybeSingle()
 
-  if (!membership) redirect('/settings?setup=true')
+  let business = Array.isArray(membership?.businesses)
+    ? membership?.businesses[0]
+    : membership?.businesses
 
-  const business = Array.isArray(membership.businesses)
-    ? membership.businesses[0]
-    : membership.businesses
+  if (!business) {
+    const { data: ownedBusiness } = await supabase
+      .from('businesses')
+      .select('id, name')
+      .eq('user_id', user.id)
+      .limit(1)
+      .maybeSingle()
+    business = ownedBusiness || undefined
+  }
+
+  if (!business) redirect('/settings?setup=true')
 
   return (
     <InventoryClient
-      businessId={membership.business_id}
+      businessId={business.id}
       businessName={business?.name || 'Inventory'}
     />
   )

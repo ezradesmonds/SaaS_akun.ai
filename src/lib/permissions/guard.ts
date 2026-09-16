@@ -68,10 +68,22 @@ export async function getAuthContext(businessId?: string | null): Promise<AuthCo
       .single()
   ])
 
-  // User must be a member of this business
-  if (memberResult.error || !memberResult.data) return null
+  let role = memberResult.data?.role as MemberRole | undefined
 
-  const role = memberResult.data.role as MemberRole
+  // Compatibility path for businesses created before membership RLS was
+  // repaired. Ownership is checked against the authenticated user's id.
+  if (!role) {
+    const { data: ownedBusiness } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('id', resolvedBusinessId)
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    if (!ownedBusiness) return null
+    role = 'owner'
+  }
+
   const planInfo = planResult.data
 
   const plan = (planInfo?.plan || 'free') as Plan

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { ensureDefaultAccounts } from '@/lib/business/default-accounts'
 import { z } from 'zod'
 
@@ -24,8 +24,12 @@ export async function POST(request: NextRequest) {
   }
 
   const { name, type } = parsed.data
+  const hasServiceRole = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY)
+  const workspaceClient = hasServiceRole ? createAdminClient() : supabase
 
-  const { data: existingBusiness, error: lookupError } = await supabase
+  // The service-role client is only used after getUser() has authenticated the
+  // request. Every privileged query is still scoped to the authenticated owner.
+  const { data: existingBusiness, error: lookupError } = await workspaceClient
     .from('businesses')
     .select('*')
     .eq('user_id', user.id)
@@ -39,7 +43,7 @@ export async function POST(request: NextRequest) {
   let business = existingBusiness
 
   if (!business) {
-    const { data: createdBusiness, error: createError } = await supabase
+    const { data: createdBusiness, error: createError } = await workspaceClient
       .from('businesses')
       .insert({
         user_id: user.id,
@@ -58,8 +62,46 @@ export async function POST(request: NextRequest) {
     business = createdBusiness
   }
 
+  const { error: membershipError } = await workspaceClient
+    .from('business_members')
+    .upsert({
+      business_id: business.id,
+      user_id: user.id,
+      role: 'owner',
+    }, { onConflict: 'business_id,user_id' })
+
+  if (membershipError) {
+    return NextResponse.json({
+      error: hasServiceRole
+        ? `Failed to repair business membership: ${membershipError.message}`
+        : 'Business membership belum terbentuk. Tambahkan SUPABASE_SERVICE_ROLE_KEY atau jalankan migrasi database terbaru.',
+      business_id: business.id,
+      retryable: true,
+    }, { status: 500 })
+  }
+
+  const { data: existingSubscription, error: subscriptionLookupError } = await workspaceClient
+    .from('subscriptions')
+    .select('id')
+    .eq('business_id', business.id)
+    .maybeSingle()
+
+  if (subscriptionLookupError) {
+    return NextResponse.json({ error: subscriptionLookupError.message }, { status: 500 })
+  }
+
+  if (!existingSubscription) {
+    const { error: subscriptionError } = await workspaceClient
+      .from('subscriptions')
+      .insert({ business_id: business.id, plan: 'free', status: 'active' })
+
+    if (subscriptionError) {
+      return NextResponse.json({ error: subscriptionError.message }, { status: 500 })
+    }
+  }
+
   try {
-    await ensureDefaultAccounts(supabase, business.id)
+    await ensureDefaultAccounts(workspaceClient, business.id)
   } catch (error) {
     return NextResponse.json({
       error: error instanceof Error ? error.message : 'Failed to create default accounts',

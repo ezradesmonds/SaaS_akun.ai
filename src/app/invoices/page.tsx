@@ -14,9 +14,19 @@ export default async function InvoicesPage() {
     .limit(1)
     .maybeSingle()
 
-  const business = Array.isArray(membership?.businesses)
+  let business = Array.isArray(membership?.businesses)
     ? membership?.businesses[0]
     : membership?.businesses
+
+  if (!business) {
+    const { data: ownedBusiness } = await supabase
+      .from('businesses')
+      .select('id, name')
+      .eq('user_id', user.id)
+      .limit(1)
+      .maybeSingle()
+    business = ownedBusiness || undefined
+  }
 
   if (!business) redirect('/settings?setup=true')
 
