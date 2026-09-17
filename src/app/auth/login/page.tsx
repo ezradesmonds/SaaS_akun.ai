@@ -26,6 +26,9 @@ function safeRedirectPath(value: string | null) {
 
 function friendlyAuthError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
+  if (message.toLowerCase().includes('konfigurasi supabase') || message.toLowerCase().includes("project's url and api key")) {
+    return 'Login Google belum aktif pada deployment ini. Tambahkan NEXT_PUBLIC_SUPABASE_URL dan NEXT_PUBLIC_SUPABASE_ANON_KEY di Vercel, lalu redeploy.'
+  }
   if (message.toLowerCase().includes('failed to fetch')) {
     return 'Supabase belum terkoneksi. Cek NEXT_PUBLIC_SUPABASE_URL dan NEXT_PUBLIC_SUPABASE_ANON_KEY di .env.local, lalu restart npm run dev.'
   }
@@ -65,18 +68,7 @@ function LoginContent() {
 
   const handleGoogle = async () => {
     setGoogleLoading(true)
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/api/auth/google?next=${redirectTo}`,
-        queryParams: { access_type: 'offline', prompt: 'consent' },
-      },
-    })
-    if (error) {
-      toast.error(friendlyAuthError(error))
-      setGoogleLoading(false)
-    }
+    window.location.assign(`/api/auth/google/start?next=${encodeURIComponent(redirectTo)}`)
   }
 
   return (

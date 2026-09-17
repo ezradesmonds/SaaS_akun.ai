@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Settings, Building2, BookOpen, Loader2, Check, Plus, Pencil } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
@@ -22,6 +22,7 @@ export default function SettingsPage() {
   const [business, setBusiness] = useState<Business | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(true)
+  const setupRepairStarted = useRef(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -39,7 +40,10 @@ export default function SettingsPage() {
 
       let resolvedBusiness = biz
 
-      if (biz) {
+      const isSetupRedirect = new URLSearchParams(window.location.search).get('setup') === 'true'
+
+      if (biz && isSetupRedirect && !setupRepairStarted.current) {
+        setupRepairStarted.current = true
         const repairResponse = await fetch('/api/business/setup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -50,12 +54,10 @@ export default function SettingsPage() {
           const body = await repairResponse.json()
           resolvedBusiness = body.business
 
-          if (new URLSearchParams(window.location.search).get('setup') === 'true') {
-            router.replace('/dashboard')
-            router.refresh()
-            return
-          }
-        } else if (new URLSearchParams(window.location.search).get('setup') === 'true') {
+          router.replace('/dashboard')
+          router.refresh()
+          return
+        } else {
           const body = await repairResponse.json().catch(() => null)
           toast.error(body?.error || 'Gagal memperbaiki akses bisnis')
         }
