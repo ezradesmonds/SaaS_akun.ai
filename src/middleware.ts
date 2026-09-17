@@ -41,6 +41,7 @@ export async function middleware(request: NextRequest) {
   // Protected routes
   const protectedRoutes = [
     '/dashboard',
+    '/capture',
     '/chat',
     '/transactions',
     '/reports',

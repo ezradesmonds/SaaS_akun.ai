@@ -1,5 +1,6 @@
 ﻿'use client'
 
+import Link from 'next/link'
 import { useState, useEffect, useCallback } from 'react'
 import {
   Receipt, Search, Plus, X, ChevronLeft, ChevronRight,
@@ -103,6 +104,7 @@ export default function TransactionsClient({ businessId, accounts }: Props) {
           <p className="page-subtitle">{total} transaksi total</p>
         </div>
         <div className="flex gap-2">
+          <Link href="/capture" className="btn-secondary">Scan dokumen</Link>
           <button
             onClick={() => setShowForm(true)}
             className="btn-primary"
@@ -120,18 +122,21 @@ export default function TransactionsClient({ businessId, accounts }: Props) {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
+            aria-label="Cari transaksi"
             placeholder="Cari transaksi..."
             className="input pl-9"
           />
         </div>
         <input
           type="date"
+          aria-label="Tanggal mulai"
           value={dateFrom}
           onChange={e => setDateFrom(e.target.value)}
           className="input w-auto [color-scheme:dark]"
         />
         <input
           type="date"
+          aria-label="Tanggal akhir"
           value={dateTo}
           onChange={e => setDateTo(e.target.value)}
           className="input w-auto [color-scheme:dark]"

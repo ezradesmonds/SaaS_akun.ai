@@ -1,5 +1,8 @@
 'use client'
 
+import DraftReview, { type DraftAccount } from '@/components/transactions/DraftReview'
+import { JournalEntrySchema } from '@/lib/accounting/journal'
+import type { JournalEntry } from '@/lib/accounting/journal'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Send, Bot, User, Loader2, Plus, Sparkles } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -8,6 +11,7 @@ interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
+  tool_calls?: { tool: string; result?: unknown }[]
   created_at: string
 }
 
@@ -30,6 +34,8 @@ export default function ChatInterface({
   initialMessages = []
 }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
+  const [accounts, setAccounts] = useState<DraftAccount[]>([])
+  useEffect(() => { fetch(`/api/accounts?business_id=${businessId}`).then(r => r.json()).then(d => setAccounts(d.accounts || d.data || [])).catch(() => {}) }, [businessId])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -79,6 +85,7 @@ export default function ChatInterface({
         id: crypto.randomUUID(),
         role: 'assistant',
         content: data.message,
+        tool_calls: data.tool_calls,
         created_at: new Date().toISOString()
       }
 
@@ -99,7 +106,7 @@ export default function ChatInterface({
   }, [messages, loading, sessionId, businessId])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
       sendMessage(input)
     }
@@ -114,7 +121,7 @@ export default function ChatInterface({
         )}
 
         {messages.map((msg, i) => (
-          <MessageBubble key={msg.id} message={msg} index={i} />
+          <div key={msg.id} className="space-y-3"><MessageBubble message={msg} index={i} />{msg.tool_calls?.map((t, j) => { const r = t.result as { ready?: boolean; payload?: unknown; idempotency_key?: string } | undefined; const draft = JournalEntrySchema.safeParse(r?.payload); return t.tool === 'create_transaction_draft' && r?.ready && draft.success ? <DraftReview key={j} initial={draft.data} idempotencyKey={r.idempotency_key} accounts={accounts} /> : null })}</div>
         ))}
 
         {loading && <TypingIndicator />}
@@ -140,6 +147,8 @@ export default function ChatInterface({
       <div className="px-4 pb-4 sm:px-6 lg:px-8">
         <div className="premium-card flex gap-3 items-end p-3 focus-within:border-brand-400/50 focus-within:shadow-focus transition-all">
           <textarea
+            aria-label="Pesan untuk AI Assistant"
+            maxLength={2000}
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
@@ -158,6 +167,7 @@ export default function ChatInterface({
             }}
           />
           <button
+            aria-label="Kirim pesan"
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || loading}
             className="flex-shrink-0 w-9 h-9 rounded-xl bg-brand-500 shadow-lg shadow-brand-950/30
@@ -219,7 +229,7 @@ function MessageBubble({ message, index }: { message: Message; index: number }) 
       <div className={`max-w-[75%] ${isUser ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
         <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap
           ${isUser
-            ? 'bg-brand-500 text-white rounded-tr-sm shadow-lg shadow-brand-950/25'
+            ? 'bg-[#143830] text-white rounded-tr-sm shadow-lg shadow-brand-950/25'
             : 'bg-surface-900/80 text-surface-100 rounded-tl-sm border border-white/10'
           }`}>
           {message.content}

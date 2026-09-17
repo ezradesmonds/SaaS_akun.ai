@@ -1,3 +1,4 @@
+import { isCashAccount, summarizeCash, unclosedEarnings, type CashLine } from './financial-summary'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { createIdempotencyKey, validateJournalLines } from '@/lib/accounting/journal'
 import type {
@@ -173,6 +174,24 @@ async function createTransaction(
   return { transaction: tx, success: true }
 }
 
+
+async function readLedgerLines(businessId: string, end: string, start?: string) {
+  const supabase = createAdminClient()
+  const rows: TransactionLineJoin[] = []
+  for (let offset = 0; ; offset += 1000) {
+    let query = supabase.from('transaction_lines')
+      .select('id, debit, credit, account:accounts(id, business_id, code, name, type), transaction:transactions!inner(date, business_id)')
+      .eq('transaction.business_id', businessId).lte('transaction.date', end)
+      .order('id').range(offset, offset + 999)
+    if (start) query = query.gte('transaction.date', start)
+    const { data, error } = await query
+    if (error) throw error
+    rows.push(...(data || []) as unknown as TransactionLineJoin[])
+    if (!data || data.length < 1000) break
+  }
+  return rows
+}
+
 async function getProfitLoss(
   businessId: string,
   input: Record<string, unknown>
@@ -182,18 +201,7 @@ async function getProfitLoss(
   const startDate = input.start_date as string
   const endDate = input.end_date as string
 
-  const { data: lines, error } = await supabase
-    .from('transaction_lines')
-    .select(`
-      debit, credit,
-      account:accounts(id, business_id, code, name, type),
-      transaction:transactions!inner(date, business_id)
-    `)
-    .eq('transaction.business_id', businessId)
-    .gte('transaction.date', startDate)
-    .lte('transaction.date', endDate)
-
-  if (error) throw error
+  const lines = await readLedgerLines(businessId, endDate, startDate)
 
   const allBalances = aggregateLinesByAccount(businessId, (lines || []) as unknown as TransactionLineJoin[])
   const revenue = allBalances.filter(a => a.type === 'REVENUE')
@@ -218,22 +226,16 @@ async function getBalanceSheet(
   const supabase = createAdminClient()
   const asOf = input.as_of_date as string || format(new Date(), 'yyyy-MM-dd')
 
-  const { data: lines, error } = await supabase
-    .from('transaction_lines')
-    .select(`
-      debit, credit,
-      account:accounts(id, business_id, code, name, type),
-      transaction:transactions!inner(date, business_id)
-    `)
-    .eq('transaction.business_id', businessId)
-    .lte('transaction.date', asOf)
-
-  if (error) throw error
+  const lines = await readLedgerLines(businessId, asOf)
 
   const all = aggregateLinesByAccount(businessId, (lines || []) as unknown as TransactionLineJoin[])
   const assets = all.filter(a => a.type === 'ASSET')
   const liabilities = all.filter(a => a.type === 'LIABILITY')
   const equity = all.filter(a => a.type === 'EQUITY')
+  const earnings = unclosedEarnings(all)
+  if (earnings !== 0) equity.push({ id: 'unclosed-earnings', business_id: businessId,
+    code: '—', name: 'Laba / rugi belum ditutup', type: 'EQUITY',
+    total_debit: 0, total_credit: 0, balance: earnings })
 
   return {
     as_of: asOf,
@@ -265,50 +267,27 @@ async function getCashSummary(
     endDate = format(endOfMonth(last), 'yyyy-MM-dd')
   } else {
     startDate = format(startOfMonth(now), 'yyyy-MM-dd')
-    endDate = format(endOfMonth(now), 'yyyy-MM-dd')
+    endDate = format(now, 'yyyy-MM-dd')
   }
 
-  const balanceSheet = await getBalanceSheet(businessId, { as_of_date: endDate })
-  const totalCash = balanceSheet.assets
-    .filter(a => ['Kas', 'Bank'].some(k => a.name.includes(k)))
-    .reduce((s, a) => s + a.balance, 0)
-
-  // Get cash in/out for period
-  const { data: lines } = await supabase
-    .from('transaction_lines')
-    .select(`
-      debit, credit,
-      account:accounts(name, type),
-      transaction:transactions!inner(date, business_id)
-    `)
-    .eq('transaction.business_id', businessId)
-    .gte('transaction.date', startDate)
-    .lte('transaction.date', endDate)
-
-  let cashIn = 0, cashOut = 0
-
-  const cashLines = (lines || []) as unknown as {
-    debit: number
-    credit: number
-    account: JoinedValue<{ name: string; type: string }>
-  }[]
-
-  cashLines.forEach((line) => {
-    const acc = firstJoin(line.account)
-    if (acc?.type === 'REVENUE') {
-      cashIn += Number(line.credit)
-    } else if (acc?.type === 'EXPENSE') {
-      cashOut += Number(line.debit)
+  const rows: CashLine[] = []
+  // Paginate: Supabase defaults to 1,000 rows per response.
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await supabase.from('transaction_lines')
+      .select('id, debit, credit, account:accounts(code, name, type), transaction:transactions!inner(id, date, business_id)')
+      .eq('transaction.business_id', businessId).lte('transaction.date', endDate)
+      .order('id').range(offset, offset + 999)
+    if (error) throw error
+    for (const row of data || []) {
+      const transaction = firstJoin(row.transaction)
+      if (transaction) rows.push({ debit: row.debit, credit: row.credit, account: firstJoin(row.account), transaction })
     }
-  })
-
-  return {
-    period: `${startDate} s/d ${endDate}`,
-    cash_balance: totalCash,
-    cash_in: cashIn,
-    cash_out: cashOut,
-    net_cash: cashIn - cashOut
+    if (!data || data.length < 1000) break
   }
+  return { period: `${startDate} s/d ${endDate}`, start_date: startDate, end_date: endDate,
+    ...summarizeCash(rows, startDate, endDate),
+    basis: 'Mutasi akun Kas/Bank; transfer internal dinetokan per jurnal. Bukan klasifikasi operasi/investasi/pendanaan.' }
+
 }
 
 async function getTransactions(
@@ -353,13 +332,13 @@ async function getDashboardStats(businessId: string): Promise<DashboardStats> {
 
   const now = new Date()
   const thisMonthStart = format(startOfMonth(now), 'yyyy-MM-dd')
-  const thisMonthEnd = format(endOfMonth(now), 'yyyy-MM-dd')
+  const thisMonthEnd = format(now, 'yyyy-MM-dd')
   const lastMonthStart = format(startOfMonth(subMonths(now, 1)), 'yyyy-MM-dd')
   const lastMonthEnd = format(endOfMonth(subMonths(now, 1)), 'yyyy-MM-dd')
 
   const balanceSheet = await getBalanceSheet(businessId, { as_of_date: thisMonthEnd })
   const cashBalance = balanceSheet.assets
-    .filter(a => ['Kas', 'Bank'].some(k => a.name.includes(k)))
+    .filter(isCashAccount)
     .reduce((s, a) => s + a.balance, 0)
 
   // This month P&L

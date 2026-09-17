@@ -1,126 +1,58 @@
 'use client'
-
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { LayoutDashboard, MessageSquare, Receipt, ScanLine, FileText, Package, BarChart3, Settings, LogOut, Users, CreditCard, Landmark, Plug, Menu, X, Store, ArrowUpRight } from 'lucide-react'
 import { BrandMark } from '@/components/brand/BrandAssets'
-import {
-  LayoutDashboard, MessageSquare, Receipt, FileText, Package,
-  BarChart3, Settings, ChevronLeft, ChevronRight,
-  LogOut, Users, CreditCard, Landmark, Plug
-} from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 
-const NAV_ITEMS = [
-  { href: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/chat',         icon: MessageSquare,   label: 'Chat AI'   },
-  { href: '/transactions', icon: Receipt,          label: 'Transaksi' },
-  { href: '/invoices',     icon: FileText,         label: 'Invoice'   },
-  { href: '/inventory',    icon: Package,          label: 'Stok'      },
-  { href: '/reports',      icon: BarChart3,        label: 'Laporan'   },
-  { href: '/tax',          icon: Landmark,         label: 'Pajak'     },
-  { href: '/integrations', icon: Plug,             label: 'Integrasi' },
-  { href: '/team',         icon: Users,            label: 'Tim'       },
-  { href: '/billing',      icon: CreditCard,       label: 'Billing'   },
-  { href: '/settings',     icon: Settings,         label: 'Pengaturan'},
+const items = [
+  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/capture', icon: ScanLine, label: 'Scan dokumen' },
+  { href: '/transactions', icon: Receipt, label: 'Transaksi' },
+  { href: '/invoices', icon: FileText, label: 'Invoice' },
+  { href: '/inventory', icon: Package, label: 'Inventory' },
+  { href: '/reports', icon: BarChart3, label: 'Laporan' },
+  { href: '/chat', icon: MessageSquare, label: 'AI Assistant' },
+  { href: '/tax', icon: Landmark, label: 'Pajak UMKM' },
+  { href: '/team', icon: Users, label: 'Akun & akses' },
+  { href: '/integrations', icon: Plug, label: 'Integrasi' },
+  { href: '/billing', icon: CreditCard, label: 'Paket & tagihan' },
+  { href: '/settings', icon: Settings, label: 'Pengaturan' },
 ]
-
 export default function AppSidebar({ businessName }: { businessName?: string }) {
-  const [collapsed, setCollapsed] = useState(false)
+  const [open, setOpen] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
-
-  const handleLogout = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    toast.success('Sampai jumpa!')
-    router.replace('/auth/login')
-    router.refresh()
+  useEffect(() => { setOpen(false) }, [pathname])
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false) }
+    window.addEventListener('keydown', close)
+    return () => window.removeEventListener('keydown', close)
+  }, [])
+  async function logout() {
+    const { error } = await createClient().auth.signOut()
+    if (error) { toast.error('Gagal keluar. Coba lagi.'); return }
+    router.replace('/auth/login'); router.refresh()
   }
-
-  return (
-    <aside className={`
-      relative flex flex-col h-screen
-      bg-surface-950/80 border-r border-white/10 backdrop-blur-xl shadow-premium
-      transition-all duration-300 ease-in-out
-      ${collapsed ? 'w-16' : 'w-60'}
-    `}>
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-white/10">
-        <BrandMark className="h-9 w-9" />
-        {!collapsed && (
-          <div className="overflow-hidden">
-            <p className="font-bold text-white text-sm tracking-normal">Akun.AI</p>
-            <p className="text-xs text-surface-400 truncate">{businessName || 'Loading...'}</p>
-          </div>
-        )}
+  return <>
+    <div className="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b border-white/10 bg-[#041019] px-4 md:hidden">
+      <Link href="/dashboard" className="flex items-center gap-2 font-semibold"><BrandMark className="h-7 w-7" />Akun.AI</Link>
+      <button className="btn-icon" aria-label={open ? 'Tutup navigasi' : 'Buka navigasi'} aria-expanded={open} aria-controls="workspace-nav" onClick={() => setOpen(!open)}>{open ? <X size={20} /> : <Menu size={20} />}</button>
+    </div>
+    {open && <button aria-label="Tutup navigasi" className="fixed inset-0 top-14 z-30 bg-black/60 md:hidden" onClick={() => setOpen(false)} />}
+    <aside id="workspace-nav" className={`${open ? 'flex' : 'hidden'} fixed bottom-0 left-0 top-14 z-40 w-[224px] shrink-0 flex-col border-r border-[#20313d] bg-[#041019] md:static md:flex md:h-dvh`}>
+      <Link href="/dashboard" className="hidden h-[78px] shrink-0 items-center gap-3 border-b border-[#20313d] px-5 md:flex"><BrandMark className="h-8 w-8" /><span className="text-xl font-semibold tracking-tight">Akun.AI</span></Link>
+      <div className="mx-3 mb-3 mt-5 flex items-center gap-3 rounded-lg border border-[#20313d] p-3">
+        <Store size={21} className="shrink-0 text-brand-400" /><div className="min-w-0"><p className="truncate text-xs font-semibold">{businessName || 'Workspace Anda'}</p><p className="mt-1 text-[11px] text-surface-400">Workspace bisnis</p></div>
       </div>
-
-      {/* Nav */}
-      <nav className="flex-1 py-4 space-y-1.5 px-2">
-        {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
-          const active = pathname.startsWith(href)
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={`
-                relative flex items-center gap-3 px-3 py-2.5 rounded-xl
-                transition-all duration-200 group
-                ${active
-                  ? 'bg-brand-500/15 text-brand-200 font-semibold shadow-focus'
-                  : 'text-surface-400 hover:text-white hover:bg-white/[0.055]'
-                }
-              `}
-            >
-              {active && (
-                <span className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-brand-400" />
-              )}
-              <Icon size={18} className="flex-shrink-0" />
-              {!collapsed && <span className="text-sm">{label}</span>}
-              {collapsed && (
-                <div className="absolute left-14 bg-surface-900 text-white text-xs px-2.5 py-1.5 rounded-lg
-                  opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50
-                  border border-white/10 shadow-premium">
-                  {label}
-                </div>
-              )}
-            </Link>
-          )
-        })}
+      <nav aria-label="Navigasi utama" className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-2">
+        {items.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={pathname.startsWith(href) ? 'page' : undefined}
+          className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] transition-colors ${pathname.startsWith(href) ? 'bg-brand-500/15 text-brand-300' : 'text-surface-300 hover:bg-white/5 hover:text-white'}`}><Icon size={17} strokeWidth={1.6} />{label}</Link>)}
       </nav>
-
-      {/* Logout */}
-      <div className="p-2 border-t border-white/10">
-        <button
-          onClick={handleLogout}
-          aria-label="Keluar"
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl
-            text-surface-400 hover:text-red-400 hover:bg-red-500/10
-            transition-all duration-200 text-sm"
-        >
-          <LogOut size={18} className="flex-shrink-0" />
-          {!collapsed && 'Keluar'}
-        </button>
-      </div>
-
-      {/* Collapse toggle */}
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        aria-label={collapsed ? 'Buka sidebar' : 'Tutup sidebar'}
-        aria-expanded={!collapsed}
-        className="absolute -right-3 top-6 w-6 h-6 rounded-full
-          bg-surface-900 border border-white/10 shadow-lg
-          flex items-center justify-center
-          hover:bg-surface-800 transition-colors"
-      >
-        {collapsed
-          ? <ChevronRight size={12} className="text-surface-400" />
-          : <ChevronLeft size={12} className="text-surface-400" />
-        }
-      </button>
+      <div className="m-3 rounded-xl border border-[#20313d] p-3"><p className="text-xs font-medium">Satu bukti, pembukuan rapi.</p><p className="mb-3 mt-1 text-[11px] leading-5 text-surface-400">Mulai dari struk atau invoice bisnis Anda.</p><Link href="/capture" className="btn-secondary w-full !py-2 !text-xs">Scan dokumen <ArrowUpRight size={14} /></Link></div>
+      <button onClick={logout} className="flex items-center gap-3 border-t border-[#20313d] px-6 py-4 text-xs text-surface-400 hover:text-white"><LogOut size={16} />Keluar</button>
     </aside>
-  )
+  </>
 }

@@ -1,3 +1,6 @@
+import ActionPlan from '@/components/dashboard/ActionPlan'
+import FinancialInsights from '@/components/dashboard/FinancialInsights'
+import CashSimulator from '@/components/dashboard/CashSimulator'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { executeTool } from '@/lib/accounting/tools'
@@ -50,8 +53,8 @@ export default async function DashboardPage() {
       {/* Header */}
       <div className="page-header">
         <div>
-          <p className="eyebrow">Ringkasan Bisnis</p>
-          <h1 className="page-title">Dashboard</h1>
+          <p className="eyebrow">Akun.AI / Financial decision workspace</p>
+          <h1 className="page-title">Pusat keputusan bisnis</h1>
           <p className="page-subtitle">{business.name}</p>
         </div>
         <Link
@@ -63,9 +66,16 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
+      <div className="premium-card grid grid-cols-2 gap-y-4 py-4 sm:grid-cols-3 xl:grid-cols-6">{[
+        ['01', 'Capture', 'Unggah bukti', '/capture'], ['02', 'Understand', 'Periksa hasil AI', '/capture'],
+        ['03', 'Record', 'Konfirmasi jurnal', '/transactions'], ['04', 'Analyze', 'Baca laporan', '/reports'],
+        ['05', 'Reason', 'Diagnosis keuangan', '/chat'], ['06', 'Act', 'Tindak lanjut', '#decisions'],
+      ].map(([n,label,hint,href]) => <Link href={href} key={n} className="workflow-step px-5 hover:text-brand-300"><p className="mb-2 text-[10px] tracking-widest text-brand-400">{n} / {label.toUpperCase()}</p><p className="text-xs text-surface-300">{hint}</p></Link>)}</div>
       {/* Stats */}
       {stats && <DashboardStatsCards stats={stats} />}
 
+      {!stats && <p role="alert" className="premium-card p-5 text-sm text-amber-300">Ringkasan belum tersedia. Periksa koneksi dan muat ulang; angka tidak ditampilkan agar data gagal tidak dianggap nol.</p>}
+      <div id="decisions" className="report-layout"><div className="space-y-5">{stats && <CashSimulator cashNow={stats.cash_balance} />}<ActionPlan businessId={business.id} /><section className="premium-card p-5"><h2 className="mb-3 font-semibold">Cakupan diagnosis</h2><p className="text-sm leading-7 text-surface-300">Sumber saat ini: pembukuan dan invoice Akun.AI. Diagnosis membantu menemukan tekanan kas; penyebab bisnis tetap perlu diperiksa.</p><div className="mt-4 flex flex-wrap gap-2"><span className="chip">Pendapatan & beban</span><span className="chip">Kas & bank</span><span className="chip">Invoice jatuh tempo</span></div><p className="mt-4 text-xs leading-6 text-surface-400">Integrasi Jurnal / Accurate / Kledo, umur stok, dan atribusi iklan belum tersedia. Data yang belum terhubung tidak dianggap nol.</p></section></div><FinancialInsights businessId={business.id} showCash /></div>
       {/* Bottom grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Transactions */}
@@ -113,7 +123,7 @@ export default async function DashboardPage() {
                     </div>
                     <p className={`text-sm font-semibold ml-4 flex-shrink-0
                       ${isRevenue ? 'text-brand-400' : 'text-surface-300'}`}>
-                      {isRevenue ? '+' : '-'}Rp{(total / 1000).toFixed(0)}rb
+                      Rp{total.toLocaleString('id-ID')}
                     </p>
                   </div>
                 )
@@ -133,7 +143,7 @@ export default async function DashboardPage() {
               { label: 'Catat Penjualan', href: '/chat', hint: 'via Chat AI' },
               { label: 'Lihat Laba Rugi', href: '/reports?type=profit_loss', hint: 'bulan ini' },
               { label: 'Input Manual', href: '/transactions', hint: 'form manual' },
-              { label: 'Neraca Saldo', href: '/reports?type=balance_sheet', hint: 'per hari ini' },
+              { label: 'Neraca', href: '/reports?type=balance_sheet', hint: 'per hari ini' },
             ].map(action => (
               <Link
                 key={action.label}

@@ -61,7 +61,7 @@ function StatCard({ label, value, changePct, positive = true, highlight, icon }:
       </div>
 
       <p className={`text-2xl font-bold tracking-normal mb-1
-        ${highlight ? 'gradient-text' : isPositive ? 'text-white' : 'text-red-400'}`}>
+        ${highlight ? 'text-brand-300' : isPositive ? 'text-white' : 'text-red-400'}`}>
         {formatIDR(value)}
       </p>
       <p className="text-xs text-surface-400">{label}</p>
@@ -81,13 +81,11 @@ export default function DashboardStatsCards({ stats }: { stats: DashboardStats }
       <StatCard
         label="Pendapatan Bulan Ini"
         value={stats.monthly_revenue}
-        changePct={stats.revenue_change_pct}
         icon={<TrendingUp size={16} className="text-emerald-400" />}
       />
       <StatCard
         label="Pengeluaran Bulan Ini"
         value={stats.monthly_expenses}
-        changePct={stats.expense_change_pct}
         positive={false}
         icon={<TrendingDown size={16} className="text-amber-400" />}
       />

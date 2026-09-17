@@ -231,3 +231,34 @@ body {
   from { transform: translateX(0); }
   to { transform: translateX(-33.333%); }
 }
+
+/* Workspace: quiet navy surfaces, mint actions, readable financial data. */
+.workspace { background: #041019; color: #e6edf1; color-scheme: dark; }
+.workspace main { min-width: 0; }
+.workspace .page-shell { max-width: 1480px; padding: 30px; }
+.workspace .page-title { font-size: 26px; font-weight: 600; letter-spacing: -.035em; }
+.workspace .eyebrow { font-size: 10px; letter-spacing: .16em; color: #8fa8b5; margin-bottom: 8px; }
+.workspace .premium-card, .workspace .table-shell, .workspace .panel-soft {
+  background: #081924; border: 1px solid #20313d; border-radius: 12px;
+  box-shadow: none; backdrop-filter: none;
+}
+.workspace .premium-card-hover:hover { transform: none; }
+.workspace .btn-primary { background: #51c99c; color: #03271d; border-radius: 8px; box-shadow: none; }
+.workspace .btn-primary:hover { background: #79ddba; transform: none; }
+.workspace .btn-secondary, .workspace .btn-icon, .workspace .input { border-radius: 8px; box-shadow: none; }
+.workspace .input { background: #05131d; border-color: #30424e; }
+.workspace .text-surface-500, .workspace .text-surface-600 { color: #8ca1af; }
+.workspace .table-head { background: #06131d; }
+.workspace .table-row { border-color: #1b303b; }
+.workspace .table-row:hover { background: #102d30; }
+.workspace .font-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.workspace :is(button, a, input, select, textarea):focus-visible { outline: 2px solid #70e0b3; outline-offset: 3px; }
+.workspace .workflow-step { border-right: 1px solid #20313d; }
+.workspace .workflow-step:last-child { border-right: 0; }
+.workspace .report-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 1023px) { .workspace .report-layout { grid-template-columns: 1fr; } }
+@media (max-width: 767px) {
+  .workspace .page-shell { padding: 22px 16px; }
+  .workspace .page-title { font-size: 23px; }
+  .workspace .workflow-step { border-right: 0; }
+}

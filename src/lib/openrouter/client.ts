@@ -5,6 +5,7 @@ const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 const SupportedIntentSchema = z.enum([
   'create_transaction',
   'ask_profit_loss',
+  'ask_business_diagnosis',
   'ask_balance_sheet',
   'ask_cash_balance',
   'search_transactions',
@@ -83,7 +84,7 @@ Kamu hanya boleh mengembalikan JSON valid. Jangan gunakan markdown. Jangan menul
 Backend akan menjalankan fungsi internal yang aman berdasarkan JSON ini.
 
 Supported intents:
-create_transaction, ask_profit_loss, ask_balance_sheet, ask_cash_balance, search_transactions, ask_expense_breakdown, general_accounting_help, unclear.
+create_transaction, ask_business_diagnosis, ask_profit_loss, ask_balance_sheet, ask_cash_balance, search_transactions, ask_expense_breakdown, general_accounting_help, unclear.
 
 Aturan:
 - Jika permintaan tidak jelas, gunakan intent "unclear" dan isi follow_up_question.
@@ -91,6 +92,7 @@ Aturan:
 - Hanya gunakan account_code/account_name dari katalog akun berikut. Jangan membuat account_id.
 - Untuk transaksi double-entry, lines harus balance: total debit = total credit.
 - Untuk pertanyaan laporan, gunakan date_range jika user menyebut periode. Jika tidak, pilih periode masuk akal dan jelaskan di response.
+- Untuk pertanyaan penyebab kas habis, diagnosis bisnis, analisis kesehatan, rekomendasi tindakan, gunakan ask_business_diagnosis. Jangan menjawab angka atau penyebab bisnis tanpa data lewat general_accounting_help.
 - Untuk bantuan umum akuntansi, jawab ringkas di response dan jangan minta tool.
 
 Katalog akun aktif:
@@ -98,7 +100,7 @@ ${accountCatalog || 'Tidak ada akun aktif.'}
 
 JSON schema yang harus dipatuhi:
 {
-  "intent": "create_transaction | ask_profit_loss | ask_balance_sheet | ask_cash_balance | search_transactions | ask_expense_breakdown | general_accounting_help | unclear",
+  "intent": "create_transaction | ask_business_diagnosis | ask_profit_loss | ask_balance_sheet | ask_cash_balance | search_transactions | ask_expense_breakdown | general_accounting_help | unclear",
   "confidence": 0.0,
   "response": "jawaban singkat untuk user",
   "follow_up_question": "opsional jika perlu klarifikasi",

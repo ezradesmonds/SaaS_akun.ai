@@ -20,6 +20,7 @@ export type JournalLine = z.infer<typeof JournalLineSchema>
 export type JournalEntry = z.infer<typeof JournalEntrySchema>
 
 export function validateJournalLines(entries: JournalLine[]) {
+  if (entries.some(e => !Number.isFinite(e.debit) || !Number.isFinite(e.credit) || e.debit < 0 || e.credit < 0)) return { error: 'Nominal jurnal harus valid dan tidak negatif' } as const
   if (entries.length < 2) {
     return { error: 'Minimal 2 baris jurnal diperlukan' } as const
   }

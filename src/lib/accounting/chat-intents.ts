@@ -1,3 +1,4 @@
+import { getDecisionData } from './decision-data'
 import { createClient } from '@/lib/supabase/server'
 import { executeTool } from '@/lib/accounting/tools'
 import type { AccountingIntent } from '@/lib/openrouter/client'
@@ -133,27 +134,14 @@ async function createTransactionFromIntent(businessId: string, intent: Accountin
     }
   }
 
-  const supabase = createClient()
-  const { data: transaction, error: txError } = await supabase.rpc('post_journal_transaction', {
-    p_business_id: businessId,
-    p_date: tx.date || todayISO(),
-    p_description: tx.description,
-    p_reference: tx.reference || null,
-    p_source: 'ai',
-    p_lines: validEntries,
-    p_idempotency_key: createIdempotencyKey(),
-  })
-
-  if (txError || !transaction) throw txError || new Error('Transaction could not be posted')
-
   return {
-    message: `Transaksi berhasil disimpan: ${tx.description} senilai ${formatIDR(totalDebit)}.`,
-    toolCalls: [{
-      tool: 'create_transaction',
-      input: { ...tx, entries: validEntries },
-      result: { transaction_id: transaction.id, total_debit: totalDebit, total_credit: totalCredit },
-    }],
+    message: `Draft ${tx.description} senilai ${formatIDR(totalDebit)} siap diperiksa. Belum dicatat ke pembukuan.`,
+    toolCalls: [{ tool: 'create_transaction_draft', input: intent,
+      result: { ...buildDraft(intent), ready: true, idempotency_key: createIdempotencyKey(),
+        payload: { business_id: businessId, date: tx.date || todayISO(), description: tx.description,
+          reference: tx.reference, source: 'ai', entries: validEntries } } }],
   }
+
 }
 
 async function searchTransactions(businessId: string, intent: AccountingIntent): Promise<ChatExecutionResult> {
@@ -205,6 +193,11 @@ export async function executeAccountingIntent(
       message: intent.follow_up_question || intent.response || 'Bisa jelaskan sedikit lagi?',
       toolCalls: [{ tool: 'unclear', input: intent, result: null }],
     }
+  }
+
+  if (intent.intent === 'ask_business_diagnosis') {
+    const data = await getDecisionData(businessId, true)
+    return { message: `${data.analysis}\n\nTindak lanjut:\n${data.actions.map(a => `- ${a.title}: ${a.detail}`).join('\n') || 'Belum ada peringatan dari data yang tersedia.'}\n\nSimpan tindakan dan uji skenario kas di Pusat keputusan bisnis.`, toolCalls: [{ tool: 'business_diagnosis', input: data.period, result: data }] }
   }
 
   if (intent.intent === 'general_accounting_help') {

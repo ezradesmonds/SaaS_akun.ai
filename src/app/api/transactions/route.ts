@@ -53,10 +53,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const supabase = createClient()
   const body = await request.json()
-  const parsed = JournalEntrySchema.safeParse({ ...body, source: 'manual' })
+  const parsed = JournalEntrySchema.safeParse({ ...body, source: body.source === 'ai' ? 'ai' : 'manual' })
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  const { business_id, date, description, reference, entries } = parsed.data
+  const { business_id, date, description, reference, entries, source } = parsed.data
   const ctx = await getAuthContext(business_id)
   if (!ctx) return NextResponse.json(AUTH_ERRORS.unauthorized, { status: 401 })
   if (!ctx.can('create_transaction')) return NextResponse.json(AUTH_ERRORS.forbidden, { status: 403 })
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     p_date: date,
     p_description: description,
     p_reference: reference || null,
-    p_source: 'manual',
+    p_source: source,
     p_lines: validation.entries,
     p_idempotency_key: idempotencyKey,
   })
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
     action: 'transaction_posted',
     targetType: 'transaction',
     targetId: tx.id,
-    metadata: { business_id: ctx.businessId, source: 'manual', idempotency_key: idempotencyKey },
+    metadata: { business_id: ctx.businessId, source, idempotency_key: idempotencyKey },
   })
 
   return NextResponse.json({ data: tx }, { status: 201 })

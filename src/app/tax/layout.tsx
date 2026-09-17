@@ -24,9 +24,9 @@ export default async function TaxLayout({ children }: { children: React.ReactNod
   const businessName = await getBusinessName()
 
   return (
-    <div className="flex h-screen overflow-hidden app-bg">
+    <div className="workspace flex h-dvh overflow-hidden app-bg">
       <AppSidebar businessName={businessName || undefined} />
-      <main className="flex-1 overflow-y-auto">
+      <main className="min-w-0 flex-1 overflow-y-auto pt-14 md:pt-0">
         {children}
       </main>
     </div>

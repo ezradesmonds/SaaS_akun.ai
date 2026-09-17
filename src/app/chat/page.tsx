@@ -1,3 +1,4 @@
+import FinancialInsights from '@/components/dashboard/FinancialInsights'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import ChatInterface from '@/components/chat/ChatInterface'
@@ -59,15 +60,15 @@ export default async function ChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-full min-h-0">
       {/* Header */}
       <div className="flex-shrink-0 px-6 py-4 border-b border-surface-800 bg-surface-900/80 backdrop-blur-sm">
-        <h1 className="font-semibold text-white">Chat dengan Akun.AI</h1>
-        <p className="text-xs text-surface-400">{business.name} - Ketik natural, AI yang ngerjain sisanya</p>
+        <h1 className="font-semibold text-white">AI Assistant</h1>
+        <p className="text-xs text-surface-400">{business.name} - Baca data bisnis dan periksa draft sebelum mencatat</p>
       </div>
 
       {/* Chat area */}
-      <div className="flex-1 overflow-hidden">
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto xl:grid-cols-[minmax(0,1fr)_360px]"><div className="min-h-[600px] min-w-0 xl:min-h-0">
         {session && (
           <ChatInterface
             sessionId={session.id}
@@ -75,7 +76,7 @@ export default async function ChatPage() {
             initialMessages={messages}
           />
         )}
-      </div>
+      </div><aside className="overflow-y-auto border-l border-white/10 p-5"><FinancialInsights businessId={business.id} /></aside></div>
     </div>
   )
 }
