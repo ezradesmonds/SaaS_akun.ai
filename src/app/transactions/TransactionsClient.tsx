@@ -475,21 +475,21 @@ function ManualEntryModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center">
       {/* Backdrop */}
       <div className="modal-backdrop" onClick={onClose} />
 
       {/* Modal */}
-      <div className="modal-panel max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="modal-panel flex max-h-[calc(100dvh-2rem)] max-w-2xl flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 sticky top-0 bg-surface-900/95 backdrop-blur">
+        <div className="z-10 flex shrink-0 items-center justify-between border-b border-white/10 bg-surface-900/95 px-6 py-4 backdrop-blur">
           <h2 className="font-semibold text-white">{isEditing ? 'Edit Transaksi' : 'Input Transaksi Manual'}</h2>
           <button onClick={onClose} className="text-surface-500 hover:text-white p-1" aria-label="Tutup modal">
             <X size={18} />
           </button>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
           {/* Basic Info */}
           <div className="grid grid-cols-2 gap-4">
             <div>
