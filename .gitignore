@@ -20,5 +20,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 
+# Supabase CLI local state
+supabase/.temp/
+
 # macOS
 .DS_Store
