@@ -1,6 +1,8 @@
 'use client'
 
-import DraftReview, { type DraftAccount } from '@/components/transactions/DraftReview'
+import DraftReview, {
+  type DraftAccount,
+} from '@/components/transactions/DraftReview'
 import { JournalEntrySchema } from '@/lib/accounting/journal'
 import type { JournalEntry } from '@/lib/accounting/journal'
 import { useState, useRef, useEffect, useCallback } from 'react'
@@ -31,11 +33,16 @@ const QUICK_PROMPTS = [
 export default function ChatInterface({
   sessionId,
   businessId,
-  initialMessages = []
+  initialMessages = [],
 }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [accounts, setAccounts] = useState<DraftAccount[]>([])
-  useEffect(() => { fetch(`/api/accounts?business_id=${businessId}`).then(r => r.json()).then(d => setAccounts(d.accounts || d.data || [])).catch(() => {}) }, [businessId])
+  useEffect(() => {
+    fetch(`/api/accounts?business_id=${businessId}`)
+      .then((r) => r.json())
+      .then((d) => setAccounts(d.accounts || d.data || []))
+      .catch(() => {})
+  }, [businessId])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -45,65 +52,74 @@ export default function ChatInterface({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
-  const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || loading) return
+  const sendMessage = useCallback(
+    async (text: string) => {
+      if (!text.trim() || loading) return
 
-    const userMsg: Message = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: text.trim(),
-      created_at: new Date().toISOString()
-    }
-
-    setMessages(prev => [...prev, userMsg])
-    setInput('')
-    setLoading(true)
-
-    try {
-      // Build history (last 10 messages for context window efficiency)
-      const history = messages.slice(-10).map(m => ({
-        role: m.role,
-        content: m.content
-      }))
-
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: sessionId,
-          business_id: businessId,
-          message: text.trim(),
-          history
-        })
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) throw new Error(data.error || 'Gagal mengirim pesan')
-
-      const assistantMsg: Message = {
+      const userMsg: Message = {
         id: crypto.randomUUID(),
-        role: 'assistant',
-        content: data.message,
-        tool_calls: data.tool_calls,
-        created_at: new Date().toISOString()
+        role: 'user',
+        content: text.trim(),
+        created_at: new Date().toISOString(),
       }
 
-      setMessages(prev => [...prev, assistantMsg])
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Gagal terhubung ke AI. Coba lagi ya.'
-      toast.error(message)
-      setMessages(prev => [...prev, {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: message,
-        created_at: new Date().toISOString()
-      }])
-    } finally {
-      setLoading(false)
-      inputRef.current?.focus()
-    }
-  }, [messages, loading, sessionId, businessId])
+      setMessages((prev) => [...prev, userMsg])
+      setInput('')
+      setLoading(true)
+
+      try {
+        // Build history (last 10 messages for context window efficiency)
+        const history = messages.slice(-10).map((m) => ({
+          role: m.role,
+          content: m.content,
+        }))
+
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: sessionId,
+            business_id: businessId,
+            message: text.trim(),
+            history,
+          }),
+        })
+
+        const data = await res.json()
+
+        if (!res.ok) throw new Error(data.error || 'Gagal mengirim pesan')
+
+        const assistantMsg: Message = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: data.message,
+          tool_calls: data.tool_calls,
+          created_at: new Date().toISOString(),
+        }
+
+        setMessages((prev) => [...prev, assistantMsg])
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : 'Gagal terhubung ke AI. Coba lagi ya.'
+        toast.error(message)
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: message,
+            created_at: new Date().toISOString(),
+          },
+        ])
+      } finally {
+        setLoading(false)
+        inputRef.current?.focus()
+      }
+    },
+    [messages, loading, sessionId, businessId],
+  )
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -116,12 +132,32 @@ export default function ChatInterface({
     <div className="flex h-full flex-col">
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 space-y-6">
-        {messages.length === 0 && (
-          <EmptyState onPrompt={sendMessage} />
-        )}
+        {messages.length === 0 && <EmptyState onPrompt={sendMessage} />}
 
         {messages.map((msg, i) => (
-          <div key={msg.id} className="space-y-3"><MessageBubble message={msg} index={i} />{msg.tool_calls?.map((t, j) => { const r = t.result as { ready?: boolean; payload?: unknown; idempotency_key?: string } | undefined; const draft = JournalEntrySchema.safeParse(r?.payload); return t.tool === 'create_transaction_draft' && r?.ready && draft.success ? <DraftReview key={j} initial={draft.data} idempotencyKey={r.idempotency_key} accounts={accounts} /> : null })}</div>
+          <div key={msg.id} className="space-y-3">
+            <MessageBubble message={msg} index={i} />
+            {msg.tool_calls?.map((t, j) => {
+              const r = t.result as
+                | {
+                    ready?: boolean
+                    payload?: unknown
+                    idempotency_key?: string
+                  }
+                | undefined
+              const draft = JournalEntrySchema.safeParse(r?.payload)
+              return t.tool === 'create_transaction_draft' &&
+                r?.ready &&
+                draft.success ? (
+                <DraftReview
+                  key={j}
+                  initial={draft.data}
+                  idempotencyKey={r.idempotency_key}
+                  accounts={accounts}
+                />
+              ) : null
+            })}
+          </div>
         ))}
 
         {loading && <TypingIndicator />}
@@ -131,7 +167,7 @@ export default function ChatInterface({
       {/* Quick prompts */}
       {messages.length === 0 && (
         <div className="px-4 pb-2 sm:px-6 lg:px-8 flex gap-2 flex-wrap">
-          {QUICK_PROMPTS.map(p => (
+          {QUICK_PROMPTS.map((p) => (
             <button
               key={p}
               onClick={() => sendMessage(p)}
@@ -151,7 +187,7 @@ export default function ChatInterface({
             maxLength={2000}
             ref={inputRef}
             value={input}
-            onChange={e => setInput(e.target.value)}
+            onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ketik pesan... (contoh: 'tadi beli kertas 50rb')"
             rows={1}
@@ -160,7 +196,7 @@ export default function ChatInterface({
               text-white placeholder:text-surface-500
               max-h-32 leading-relaxed"
             style={{ minHeight: '24px' }}
-            onInput={e => {
+            onInput={(e) => {
               const t = e.target as HTMLTextAreaElement
               t.style.height = 'auto'
               t.style.height = `${Math.min(t.scrollHeight, 128)}px`
@@ -175,10 +211,11 @@ export default function ChatInterface({
               hover:bg-brand-400 disabled:opacity-40 disabled:cursor-not-allowed
               transition-all duration-150 active:scale-95"
           >
-            {loading
-              ? <Loader2 size={16} className="animate-spin text-white" />
-              : <Send size={16} className="text-white" />
-            }
+            {loading ? (
+              <Loader2 size={16} className="animate-spin text-white" />
+            ) : (
+              <Send size={16} className="text-white" />
+            )}
           </button>
         </div>
         <p className="text-xs text-surface-600 text-center mt-2">
@@ -199,16 +236,24 @@ function EmptyState({ onPrompt }: { onPrompt: (p: string) => void }) {
       <div className="w-16 h-16 rounded-2xl border border-brand-400/25 bg-brand-500/15 flex items-center justify-center mb-4 shadow-lg shadow-brand-950/25">
         <Sparkles size={28} className="text-brand-400" />
       </div>
-      <h3 className="text-lg font-semibold text-white mb-2">Halo, saya Akun.AI</h3>
+      <h3 className="text-lg font-semibold text-white mb-2">
+        Halo, saya Akun.AI
+      </h3>
       <p className="text-surface-400 text-sm max-w-sm leading-relaxed">
-        Saya bisa bantu catat transaksi, menjawab laporan keuangan,
-        dan memberi insight bisnis dengan bahasa sehari-hari.
+        Saya bisa bantu catat transaksi, menjawab laporan keuangan, dan memberi
+        insight bisnis dengan bahasa sehari-hari.
       </p>
     </div>
   )
 }
 
-function MessageBubble({ message, index }: { message: Message; index: number }) {
+function MessageBubble({
+  message,
+  index,
+}: {
+  message: Message
+  index: number
+}) {
   const isUser = message.role === 'user'
 
   return (
@@ -217,26 +262,35 @@ function MessageBubble({ message, index }: { message: Message; index: number }) 
       style={{ animationDelay: `${index * 0.05}s` }}
     >
       {/* Avatar */}
-      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center
-        ${isUser ? 'bg-brand-500 shadow-lg shadow-brand-950/25' : 'bg-surface-800 border border-white/10'}`}>
-        {isUser
-          ? <User size={14} className="text-white" />
-          : <Bot size={14} className="text-brand-400" />
-        }
+      <div
+        className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center
+        ${isUser ? 'bg-brand-500 shadow-lg shadow-brand-950/25' : 'bg-surface-800 border border-white/10'}`}
+      >
+        {isUser ? (
+          <User size={14} className="text-white" />
+        ) : (
+          <Bot size={14} className="text-brand-400" />
+        )}
       </div>
 
       {/* Bubble */}
-      <div className={`max-w-[75%] ${isUser ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
-        <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap
-          ${isUser
-            ? 'bg-[#143830] text-white rounded-tr-sm shadow-lg shadow-brand-950/25'
-            : 'bg-surface-900/80 text-surface-100 rounded-tl-sm border border-white/10'
-          }`}>
+      <div
+        className={`max-w-[75%] ${isUser ? 'items-end' : 'items-start'} flex flex-col gap-1`}
+      >
+        <div
+          className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap
+          ${
+            isUser
+              ? 'bg-[#143830] text-white rounded-tr-sm shadow-lg shadow-brand-950/25'
+              : 'bg-surface-900/80 text-surface-100 rounded-tl-sm border border-white/10'
+          }`}
+        >
           {message.content}
         </div>
         <span className="text-xs text-surface-600 px-1">
           {new Date(message.created_at).toLocaleTimeString('id-ID', {
-            hour: '2-digit', minute: '2-digit'
+            hour: '2-digit',
+            minute: '2-digit',
           })}
         </span>
       </div>
@@ -247,8 +301,10 @@ function MessageBubble({ message, index }: { message: Message; index: number }) 
 function TypingIndicator() {
   return (
     <div className="flex gap-3 message-animate">
-      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-surface-700 border border-surface-600
-        flex items-center justify-center">
+      <div
+        className="flex-shrink-0 w-8 h-8 rounded-full bg-surface-700 border border-surface-600
+        flex items-center justify-center"
+      >
         <Bot size={14} className="text-brand-400" />
       </div>
       <div className="bg-surface-800 border border-surface-700 rounded-2xl rounded-tl-sm px-4 py-3">

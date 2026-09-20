@@ -72,6 +72,10 @@ export async function POST(request: NextRequest) {
 
     const intent = await classifyAccountingIntent({ messages, accountCatalog })
     const validatedIntent = AccountingIntentSchema.parse(intent)
+    if (validatedIntent.intent === 'ask_business_diagnosis' && ctx.usage.ai_calls + 2 > ctx.usage.ai_calls_limit) {
+      await trackUsage(business_id, 'ai_calls')
+      return jsonError('Diagnosis membutuhkan dua panggilan AI. Kuota tersisa tidak cukup.', 402)
+    }
     const execution = await executeAccountingIntent(business_id, validatedIntent)
 
     const { data: savedMessage } = await supabase
@@ -85,7 +89,7 @@ export async function POST(request: NextRequest) {
       .select()
       .single()
 
-    trackUsage(business_id, 'ai_calls')
+    await trackUsage(business_id, 'ai_calls')
 
     return NextResponse.json({
       message: execution.message,
@@ -93,7 +97,7 @@ export async function POST(request: NextRequest) {
       intent: validatedIntent.intent,
       tool_calls: execution.toolCalls,
       usage: {
-        ai_calls: ctx.usage.ai_calls + 1,
+        ai_calls: ctx.usage.ai_calls + (validatedIntent.intent === 'ask_business_diagnosis' ? 2 : 1),
         ai_calls_limit: ctx.usage.ai_calls_limit,
       },
     })

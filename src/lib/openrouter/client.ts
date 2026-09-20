@@ -1,3 +1,4 @@
+import { businessToday } from '@/lib/accounting/dates'
 import { z } from 'zod'
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
@@ -71,7 +72,7 @@ function getOpenRouterConfig() {
 }
 
 function todayISO() {
-  return new Date().toISOString().split('T')[0]
+  return businessToday()
 }
 
 function buildSystemPrompt(accountCatalog: string) {

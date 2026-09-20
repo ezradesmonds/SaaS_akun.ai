@@ -1,3 +1,4 @@
+import { BusinessDateSchema } from '@/lib/accounting/dates'
 import { NextRequest, NextResponse } from 'next/server'
 import { executeTool } from '@/lib/accounting/tools'
 import { AUTH_ERRORS, getAuthContext } from '@/lib/permissions/guard'
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
       case 'profit_loss':
         const startDate = searchParams.get('start_date')
         const endDate = searchParams.get('end_date')
-        if (!startDate || !endDate) {
+        if (!BusinessDateSchema.safeParse(startDate).success || !BusinessDateSchema.safeParse(endDate).success || startDate! > endDate!) {
           return NextResponse.json({ error: 'start_date and end_date required' }, { status: 400 })
         }
         data = await executeTool('get_profit_loss', { start_date: startDate, end_date: endDate }, ctx.businessId)
@@ -34,11 +35,13 @@ export async function GET(request: NextRequest) {
 
       case 'balance_sheet':
         const asOf = searchParams.get('as_of_date')
+        if (asOf && !BusinessDateSchema.safeParse(asOf).success) return NextResponse.json({ error: 'Tanggal tidak valid' }, { status: 400 })
         data = await executeTool('get_balance_sheet', { as_of_date: asOf }, ctx.businessId)
         break
 
       case 'cash_summary':
         const period = searchParams.get('period') || 'this_month'
+        if (!['today', 'this_month', 'last_month'].includes(period)) return NextResponse.json({ error: 'Periode tidak valid' }, { status: 400 })
         data = await executeTool('get_cash_summary', { period }, ctx.businessId)
         break
 

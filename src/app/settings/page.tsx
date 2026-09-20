@@ -233,6 +233,7 @@ function BusinessSetup({ onCreated }: { onCreated: (business: Business) => void 
   )
 }
 function BusinessSettings({ business, onSaved }: { business: Business; onSaved: (b: Business) => void }) {
+  const router = useRouter()
   const [name, setName] = useState(business.name)
   const [description, setDescription] = useState(business.description || '')
   const [loading, setLoading] = useState(false)
@@ -251,6 +252,8 @@ function BusinessSettings({ business, onSaved }: { business: Business; onSaved: 
     if (error) { toast.error('Gagal menyimpan'); return }
     onSaved(data)
     toast.success('Profil bisnis diperbarui')
+    router.replace('/dashboard')
+    router.refresh()
   }
 
   return (

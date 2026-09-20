@@ -9,11 +9,11 @@ export const JournalLineSchema = z.object({
 
 export const JournalEntrySchema = z.object({
   business_id: z.string().uuid(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: z.string().date(),
   description: z.string().trim().min(1).max(500),
   reference: z.string().trim().max(120).optional(),
   source: z.enum(['manual', 'ai', 'import', 'invoice', 'payment']).default('manual'),
-  entries: z.array(JournalLineSchema).min(2),
+  entries: z.array(JournalLineSchema).min(2).max(100),
 })
 
 export type JournalLine = z.infer<typeof JournalLineSchema>

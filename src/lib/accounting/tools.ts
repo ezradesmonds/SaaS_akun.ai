@@ -1,3 +1,4 @@
+import { businessPeriods, businessToday } from './dates'
 import { isCashAccount, summarizeCash, unclosedEarnings, type CashLine } from './financial-summary'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { createIdempotencyKey, validateJournalLines } from '@/lib/accounting/journal'
@@ -5,7 +6,6 @@ import type {
   Account, Transaction, AccountBalance,
   ProfitLossReport, BalanceSheetReport, DashboardStats
 } from '@/types'
-import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns'
 
 type ToolResult =
   | Record<string, unknown>
@@ -161,7 +161,7 @@ async function createTransaction(
 
   const { data: tx, error: txError } = await supabase.rpc('post_journal_transaction', {
     p_business_id: businessId,
-    p_date: input.date as string || format(new Date(), 'yyyy-MM-dd'),
+    p_date: input.date as string || businessToday(),
     p_description: input.description as string,
     p_reference: input.reference as string || null,
     p_source: 'ai',
@@ -224,7 +224,7 @@ async function getBalanceSheet(
   input: Record<string, unknown>
 ): Promise<BalanceSheetReport> {
   const supabase = createAdminClient()
-  const asOf = input.as_of_date as string || format(new Date(), 'yyyy-MM-dd')
+  const asOf = input.as_of_date as string || businessToday()
 
   const lines = await readLedgerLines(businessId, asOf)
 
@@ -258,17 +258,10 @@ async function getCashSummary(
   const period = input.period as string || 'this_month'
   let startDate: string, endDate: string
 
-  const now = new Date()
-  if (period === 'today') {
-    startDate = endDate = format(now, 'yyyy-MM-dd')
-  } else if (period === 'last_month') {
-    const last = subMonths(now, 1)
-    startDate = format(startOfMonth(last), 'yyyy-MM-dd')
-    endDate = format(endOfMonth(last), 'yyyy-MM-dd')
-  } else {
-    startDate = format(startOfMonth(now), 'yyyy-MM-dd')
-    endDate = format(now, 'yyyy-MM-dd')
-  }
+  const dates = businessPeriods()
+  if (period === 'today') { startDate = endDate = dates.today }
+  else if (period === 'last_month') { startDate = dates.lastStart; endDate = dates.lastEnd }
+  else { startDate = dates.start; endDate = dates.today }
 
   const rows: CashLine[] = []
   // Paginate: Supabase defaults to 1,000 rows per response.
@@ -330,11 +323,11 @@ async function getTransactions(
 async function getDashboardStats(businessId: string): Promise<DashboardStats> {
   const supabase = createAdminClient()
 
-  const now = new Date()
-  const thisMonthStart = format(startOfMonth(now), 'yyyy-MM-dd')
-  const thisMonthEnd = format(now, 'yyyy-MM-dd')
-  const lastMonthStart = format(startOfMonth(subMonths(now, 1)), 'yyyy-MM-dd')
-  const lastMonthEnd = format(endOfMonth(subMonths(now, 1)), 'yyyy-MM-dd')
+  const dates = businessPeriods()
+  const thisMonthStart = dates.start
+  const thisMonthEnd = dates.today
+  const lastMonthStart = dates.lastStart
+  const lastMonthEnd = dates.comparableEnd
 
   const balanceSheet = await getBalanceSheet(businessId, { as_of_date: thisMonthEnd })
   const cashBalance = balanceSheet.assets

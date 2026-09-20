@@ -52,7 +52,8 @@ export async function GET(request: NextRequest) {
 // POST /api/transactions - manual create
 export async function POST(request: NextRequest) {
   const supabase = createClient()
-  const body = await request.json()
+  const body = await request.json().catch(() => null)
+  if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Data transaksi tidak valid' }, { status: 400 })
   const parsed = JournalEntrySchema.safeParse({ ...body, source: body.source === 'ai' ? 'ai' : 'manual' })
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
@@ -60,6 +61,12 @@ export async function POST(request: NextRequest) {
   const ctx = await getAuthContext(business_id)
   if (!ctx) return NextResponse.json(AUTH_ERRORS.unauthorized, { status: 401 })
   if (!ctx.can('create_transaction')) return NextResponse.json(AUTH_ERRORS.forbidden, { status: 403 })
+  const idempotencyKey = request.headers.get('idempotency-key') || createIdempotencyKey()
+  if (idempotencyKey.length > 200) return NextResponse.json({ error: 'Kunci penyimpanan tidak valid' }, { status: 400 })
+  const { data: existing, error: lookupError } = await supabase.from('transactions').select('*')
+    .eq('business_id', ctx.businessId).eq('idempotency_key', idempotencyKey).maybeSingle()
+  if (lookupError) return NextResponse.json({ error: 'Status penyimpanan belum dapat diperiksa. Coba lagi.' }, { status: 503 })
+  if (existing) return NextResponse.json({ data: existing, replayed: true })
   if (!ctx.withinLimit('tx')) {
     return NextResponse.json({ ...AUTH_ERRORS.plan_limit_tx, usage: ctx.usage, plan: ctx.plan }, { status: 402 })
   }
@@ -67,7 +74,7 @@ export async function POST(request: NextRequest) {
   const validation = validateJournalLines(entries)
   if (validation.error) return NextResponse.json({ error: validation.error }, { status: 400 })
 
-  const idempotencyKey = request.headers.get('idempotency-key') || createIdempotencyKey()
+
   const { data: tx, error: txError } = await supabase.rpc('post_journal_transaction', {
     p_business_id: ctx.businessId,
     p_date: date,

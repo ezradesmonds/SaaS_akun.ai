@@ -23,6 +23,7 @@ WITH CHECK (created_by = auth.uid() AND EXISTS (
 CREATE POLICY financial_actions_update ON public.financial_actions FOR UPDATE TO authenticated
 USING (EXISTS (SELECT 1 FROM public.business_members m WHERE m.business_id = financial_actions.business_id AND m.user_id = auth.uid() AND m.role IN ('owner', 'admin', 'member')))
 WITH CHECK (EXISTS (SELECT 1 FROM public.business_members m WHERE m.business_id = financial_actions.business_id AND m.user_id = auth.uid() AND m.role IN ('owner', 'admin', 'member')));
+REVOKE ALL ON public.financial_actions FROM anon, authenticated;
 GRANT SELECT, INSERT ON public.financial_actions TO authenticated;
 GRANT UPDATE (status, completed_at) ON public.financial_actions TO authenticated;
 CREATE INDEX IF NOT EXISTS financial_actions_business_due_idx ON public.financial_actions (business_id, status, due_date);

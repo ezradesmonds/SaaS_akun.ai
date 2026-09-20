@@ -6,7 +6,9 @@ import type { ChatMessage } from '@/types'
 
 export default async function ChatPage() {
   const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
   // Get business
@@ -39,7 +41,7 @@ export default async function ChatPage() {
       .insert({
         business_id: business.id,
         user_id: user.id,
-        title: `Chat ${new Date().toLocaleDateString('id-ID')}`
+        title: `Chat ${new Date().toLocaleDateString('id-ID')}`,
       })
       .select()
       .single()
@@ -64,19 +66,26 @@ export default async function ChatPage() {
       {/* Header */}
       <div className="flex-shrink-0 px-6 py-4 border-b border-surface-800 bg-surface-900/80 backdrop-blur-sm">
         <h1 className="font-semibold text-white">AI Assistant</h1>
-        <p className="text-xs text-surface-400">{business.name} - Baca data bisnis dan periksa draft sebelum mencatat</p>
+        <p className="text-xs text-surface-400">
+          {business.name} - Baca data bisnis dan periksa draft sebelum mencatat
+        </p>
       </div>
 
       {/* Chat area */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto xl:grid-cols-[minmax(0,1fr)_360px]"><div className="min-h-[600px] min-w-0 xl:min-h-0">
-        {session && (
-          <ChatInterface
-            sessionId={session.id}
-            businessId={business.id}
-            initialMessages={messages}
-          />
-        )}
-      </div><aside className="overflow-y-auto border-l border-white/10 p-5"><FinancialInsights businessId={business.id} /></aside></div>
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="min-h-[600px] min-w-0 xl:min-h-0">
+          {session && (
+            <ChatInterface
+              sessionId={session.id}
+              businessId={business.id}
+              initialMessages={messages}
+            />
+          )}
+        </div>
+        <aside className="overflow-y-auto border-l border-white/10 p-5">
+          <FinancialInsights businessId={business.id} />
+        </aside>
+      </div>
     </div>
   )
 }

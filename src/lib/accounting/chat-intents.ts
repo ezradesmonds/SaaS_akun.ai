@@ -1,9 +1,9 @@
+import { businessPeriods, businessToday } from './dates'
 import { getDecisionData } from './decision-data'
 import { createClient } from '@/lib/supabase/server'
 import { executeTool } from '@/lib/accounting/tools'
 import type { AccountingIntent } from '@/lib/openrouter/client'
 import type { Account, Transaction } from '@/types'
-import { format, endOfMonth, startOfMonth } from 'date-fns'
 import { createIdempotencyKey } from '@/lib/accounting/journal'
 
 type ChatExecutionResult = {
@@ -26,15 +26,12 @@ function formatIDR(amount: number) {
 }
 
 function currentMonthRange() {
-  const now = new Date()
-  return {
-    start_date: format(startOfMonth(now), 'yyyy-MM-dd'),
-    end_date: format(endOfMonth(now), 'yyyy-MM-dd'),
-  }
+  const dates = businessPeriods()
+  return { start_date: dates.start, end_date: dates.today }
 }
 
 function todayISO() {
-  return new Date().toISOString().split('T')[0]
+  return businessToday()
 }
 
 export async function getAccountCatalog(businessId: string) {

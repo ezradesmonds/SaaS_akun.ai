@@ -11,7 +11,9 @@ import type { DashboardStats, Transaction } from '@/types'
 
 export default async function DashboardPage() {
   const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
   // Get user's business (first one for now)
@@ -28,17 +30,23 @@ export default async function DashboardPage() {
   let recentTx: Transaction[] = []
 
   try {
-    stats = await executeTool('get_dashboard_stats', {}, business.id) as unknown as DashboardStats
+    stats = (await executeTool(
+      'get_dashboard_stats',
+      {},
+      business.id,
+    )) as unknown as DashboardStats
 
     const { data: txData } = await supabase
       .from('transactions')
-      .select(`
+      .select(
+        `
         *,
         lines:transaction_lines(
           debit, credit,
           account:accounts(name, type)
         )
-      `)
+      `,
+      )
       .eq('business_id', business.id)
       .order('date', { ascending: false })
       .limit(5)
@@ -57,25 +65,65 @@ export default async function DashboardPage() {
           <h1 className="page-title">Pusat keputusan bisnis</h1>
           <p className="page-subtitle">{business.name}</p>
         </div>
-        <Link
-          href="/chat"
-          className="btn-primary"
-        >
+        <Link href="/chat" className="btn-primary">
           <MessageSquare size={15} />
           Tanya AI
         </Link>
       </div>
 
-      <div className="premium-card grid grid-cols-2 gap-y-4 py-4 sm:grid-cols-3 xl:grid-cols-6">{[
-        ['01', 'Capture', 'Unggah bukti', '/capture'], ['02', 'Understand', 'Periksa hasil AI', '/capture'],
-        ['03', 'Record', 'Konfirmasi jurnal', '/transactions'], ['04', 'Analyze', 'Baca laporan', '/reports'],
-        ['05', 'Reason', 'Diagnosis keuangan', '/chat'], ['06', 'Act', 'Tindak lanjut', '#decisions'],
-      ].map(([n,label,hint,href]) => <Link href={href} key={n} className="workflow-step px-5 hover:text-brand-300"><p className="mb-2 text-[10px] tracking-widest text-brand-400">{n} / {label.toUpperCase()}</p><p className="text-xs text-surface-300">{hint}</p></Link>)}</div>
+      <div className="premium-card grid grid-cols-2 gap-y-4 py-4 sm:grid-cols-3 xl:grid-cols-6">
+        {[
+          ['01', 'Capture', 'Unggah bukti', '/capture'],
+          ['02', 'Understand', 'Periksa hasil AI', '/capture'],
+          ['03', 'Record', 'Konfirmasi jurnal', '/transactions'],
+          ['04', 'Analyze', 'Baca laporan', '/reports'],
+          ['05', 'Reason', 'Diagnosis keuangan', '/chat'],
+          ['06', 'Act', 'Tindak lanjut', '#decisions'],
+        ].map(([n, label, hint, href]) => (
+          <Link
+            href={href}
+            key={n}
+            className="workflow-step px-5 hover:text-brand-300"
+          >
+            <p className="mb-2 text-[10px] tracking-widest text-brand-400">
+              {n} / {label.toUpperCase()}
+            </p>
+            <p className="text-xs text-surface-300">{hint}</p>
+          </Link>
+        ))}
+      </div>
       {/* Stats */}
       {stats && <DashboardStatsCards stats={stats} />}
 
-      {!stats && <p role="alert" className="premium-card p-5 text-sm text-amber-300">Ringkasan belum tersedia. Periksa koneksi dan muat ulang; angka tidak ditampilkan agar data gagal tidak dianggap nol.</p>}
-      <div id="decisions" className="report-layout"><div className="space-y-5">{stats && <CashSimulator cashNow={stats.cash_balance} />}<ActionPlan businessId={business.id} /><section className="premium-card p-5"><h2 className="mb-3 font-semibold">Cakupan diagnosis</h2><p className="text-sm leading-7 text-surface-300">Sumber saat ini: pembukuan dan invoice Akun.AI. Diagnosis membantu menemukan tekanan kas; penyebab bisnis tetap perlu diperiksa.</p><div className="mt-4 flex flex-wrap gap-2"><span className="chip">Pendapatan & beban</span><span className="chip">Kas & bank</span><span className="chip">Invoice jatuh tempo</span></div><p className="mt-4 text-xs leading-6 text-surface-400">Integrasi Jurnal / Accurate / Kledo, umur stok, dan atribusi iklan belum tersedia. Data yang belum terhubung tidak dianggap nol.</p></section></div><FinancialInsights businessId={business.id} showCash /></div>
+      {!stats && (
+        <p role="alert" className="premium-card p-5 text-sm text-amber-300">
+          Ringkasan belum tersedia. Periksa koneksi dan muat ulang; angka tidak
+          ditampilkan agar data gagal tidak dianggap nol.
+        </p>
+      )}
+      <div id="decisions" className="report-layout">
+        <div className="space-y-5">
+          {stats && <CashSimulator cashNow={stats.cash_balance} />}
+          <ActionPlan businessId={business.id} />
+          <section className="premium-card p-5">
+            <h2 className="mb-3 font-semibold">Cakupan diagnosis</h2>
+            <p className="text-sm leading-7 text-surface-300">
+              Sumber saat ini: pembukuan dan invoice Akun.AI. Diagnosis membantu
+              menemukan tekanan kas; penyebab bisnis tetap perlu diperiksa.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="chip">Pendapatan & beban</span>
+              <span className="chip">Kas & bank</span>
+              <span className="chip">Invoice jatuh tempo</span>
+            </div>
+            <p className="mt-4 text-xs leading-6 text-surface-400">
+              Integrasi Jurnal / Accurate / Kledo, umur stok, dan atribusi iklan
+              belum tersedia. Data yang belum terhubung tidak dianggap nol.
+            </p>
+          </section>
+        </div>
+        <FinancialInsights businessId={business.id} showCash />
+      </div>
       {/* Bottom grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Transactions */}
@@ -85,7 +133,10 @@ export default async function DashboardPage() {
               <Receipt size={16} className="text-brand-400" />
               Transaksi Terbaru
             </h2>
-            <Link href="/transactions" className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1">
+            <Link
+              href="/transactions"
+              className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1"
+            >
               Lihat semua <ArrowRight size={12} />
             </Link>
           </div>
@@ -94,35 +145,52 @@ export default async function DashboardPage() {
             <div className="empty-state py-10">
               <Receipt size={34} className="mb-3 opacity-35" />
               <p className="text-sm">Belum ada transaksi.</p>
-              <Link href="/chat" className="mt-3 btn-secondary">Catat lewat chat <ArrowRight size={14} /></Link>
+              <Link href="/chat" className="mt-3 btn-secondary">
+                Catat lewat chat <ArrowRight size={14} />
+              </Link>
             </div>
           ) : (
             <div className="space-y-3">
-              {recentTx.map(tx => {
-                const total = tx.lines?.reduce((s, l) => s + Number(l.debit), 0) || 0
-                const isRevenue = tx.lines?.some(l => l.account?.type === 'REVENUE')
+              {recentTx.map((tx) => {
+                const total =
+                  tx.lines?.reduce((s, l) => s + Number(l.debit), 0) || 0
+                const isRevenue = tx.lines?.some(
+                  (l) => l.account?.type === 'REVENUE',
+                )
 
                 return (
-                  <div key={tx.id} className="flex items-center justify-between rounded-xl px-3 py-2.5
-                    transition-colors hover:bg-white/[0.035]">
+                  <div
+                    key={tx.id}
+                    className="flex items-center justify-between rounded-xl px-3 py-2.5
+                    transition-colors hover:bg-white/[0.035]"
+                  >
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white truncate">{tx.description}</p>
+                      <p className="text-sm text-white truncate">
+                        {tx.description}
+                      </p>
                       <p className="text-xs text-surface-500 mt-0.5">
                         {new Date(tx.date).toLocaleDateString('id-ID', {
-                          day: 'numeric', month: 'short', year: 'numeric'
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
                         })}
                         {' - '}
-                        <span className={`px-1.5 py-0.5 rounded-md text-xs
-                          ${tx.source === 'ai'
-                            ? 'bg-brand-500/15 text-brand-400'
-                            : 'bg-surface-700 text-surface-400'
-                          }`}>
+                        <span
+                          className={`px-1.5 py-0.5 rounded-md text-xs
+                          ${
+                            tx.source === 'ai'
+                              ? 'bg-brand-500/15 text-brand-400'
+                              : 'bg-surface-700 text-surface-400'
+                          }`}
+                        >
                           {tx.source === 'ai' ? 'AI' : 'Manual'}
                         </span>
                       </p>
                     </div>
-                    <p className={`text-sm font-semibold ml-4 flex-shrink-0
-                      ${isRevenue ? 'text-brand-400' : 'text-surface-300'}`}>
+                    <p
+                      className={`text-sm font-semibold ml-4 flex-shrink-0
+                      ${isRevenue ? 'text-brand-400' : 'text-surface-300'}`}
+                    >
                       Rp{total.toLocaleString('id-ID')}
                     </p>
                   </div>
@@ -141,10 +209,22 @@ export default async function DashboardPage() {
           <div className="space-y-2">
             {[
               { label: 'Catat Penjualan', href: '/chat', hint: 'via Chat AI' },
-              { label: 'Lihat Laba Rugi', href: '/reports?type=profit_loss', hint: 'bulan ini' },
-              { label: 'Input Manual', href: '/transactions', hint: 'form manual' },
-              { label: 'Neraca', href: '/reports?type=balance_sheet', hint: 'per hari ini' },
-            ].map(action => (
+              {
+                label: 'Lihat Laba Rugi',
+                href: '/reports?type=profit_loss',
+                hint: 'bulan ini',
+              },
+              {
+                label: 'Input Manual',
+                href: '/transactions',
+                hint: 'form manual',
+              },
+              {
+                label: 'Neraca',
+                href: '/reports?type=balance_sheet',
+                hint: 'per hari ini',
+              },
+            ].map((action) => (
               <Link
                 key={action.label}
                 href={action.href}
@@ -157,7 +237,10 @@ export default async function DashboardPage() {
                   </p>
                   <p className="text-xs text-surface-500">{action.hint}</p>
                 </div>
-                <ArrowRight size={14} className="text-surface-600 group-hover:text-brand-400 transition-colors" />
+                <ArrowRight
+                  size={14}
+                  className="text-surface-600 group-hover:text-brand-400 transition-colors"
+                />
               </Link>
             ))}
           </div>

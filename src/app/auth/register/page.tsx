@@ -64,7 +64,9 @@ export default function RegisterPage() {
       }
 
       if (!authData.session) {
-        toast.success('Akun dibuat. Cek email kamu untuk verifikasi, lalu login untuk setup bisnis.')
+        toast.success(
+          'Cek email untuk melanjutkan. Jika sebelumnya masuk lewat Google, gunakan tombol Google dengan email yang sama.',
+        )
         router.push('/auth/login')
         router.refresh()
         return

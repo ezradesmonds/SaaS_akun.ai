@@ -1,3 +1,4 @@
+import { businessToday } from '@/lib/accounting/dates'
 import { validateJournalLines } from '@/lib/accounting/journal'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext, trackUsage, AUTH_ERRORS } from '@/lib/permissions/guard'
@@ -43,7 +44,12 @@ export async function POST(request: NextRequest) {
   try {
     // Convert image to base64
     const arrayBuffer = await image.arrayBuffer()
-    const base64 = Buffer.from(arrayBuffer).toString('base64')
+    const bytes = Buffer.from(arrayBuffer)
+    const matchesType = image.type === 'image/jpeg' ? bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+      : image.type === 'image/png' ? bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))
+      : bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP'
+    if (!matchesType) return NextResponse.json({ error: 'Isi file tidak sesuai format gambar.' }, { status: 400 })
+    const base64 = bytes.toString('base64')
     const mimeType = image.type
 
     // Get business accounts for context
@@ -103,7 +109,7 @@ interface OCRResult {
 }
 
 const OCRResultSchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: z.string().date(),
   description: z.string().trim().min(1).max(500),
   merchant: z.string().trim().max(240).optional(),
   items: z.array(z.object({ name: z.string().trim().min(1).max(240), amount: z.number().finite().min(0) })).max(100),
@@ -129,7 +135,7 @@ async function callVisionLLM(
   if (!process.env.OPENROUTER_API_KEY || !model) {
     throw new Error('OCR belum dikonfigurasi. Atur OPENROUTER_API_KEY dan OPENROUTER_OCR_MODEL atau OPENROUTER_MODEL.')
   }
-  const today = new Date().toISOString().split('T')[0]
+  const today = businessToday()
 
   const systemPrompt = `
 Kamu adalah AI yang mengekstrak data transaksi dari foto struk/nota/kwitansi untuk sistem akuntansi UMKM Indonesia.
